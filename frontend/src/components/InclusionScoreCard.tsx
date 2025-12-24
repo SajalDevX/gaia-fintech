@@ -11,9 +11,6 @@ import {
   Users,
   Heart,
   MapPin,
-  DollarSign,
-  TrendingUp,
-  Shield,
   AlertTriangle,
   CheckCircle,
 } from 'lucide-react';

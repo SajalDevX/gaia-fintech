@@ -22,7 +22,6 @@ import {
   Target,
   Award,
   BarChart3,
-  PieChart,
   ArrowUpRight,
   ArrowDownRight,
   Info,

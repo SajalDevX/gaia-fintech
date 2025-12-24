@@ -24,12 +24,26 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
-    # AI/ML Configuration
-    OPENAI_API_KEY: Optional[str] = None
-    ANTHROPIC_API_KEY: Optional[str] = None
+    # AI/ML Configuration (Multi-Provider LLM Support)
+    OPENAI_API_KEY: Optional[str] = None  # GPT-4o
+    ANTHROPIC_API_KEY: Optional[str] = None  # Claude Haiku
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_REGION: str = "us-east-1"
+
+    # Google Gemini Configuration
+    GOOGLE_GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.0-flash-exp"  # Fast, experimental model
+    GEMINI_PRO_MODEL: str = "gemini-1.5-pro"  # Better quality for complex reasoning/debate
+    GEMINI_REQUESTS_PER_MINUTE: int = 60
+    GEMINI_MAX_RETRIES: int = 3
+    GEMINI_RETRY_DELAY: float = 1.0
+    GEMINI_CACHE_TTL: int = 3600  # 1 hour cache
+
+    # External Data APIs
+    NEWS_API_KEY: Optional[str] = None  # newsapi.org
+    ALPHA_VANTAGE_API_KEY: Optional[str] = None  # Financial data
+    SEC_EDGAR_USER_AGENT: str = "GAIA ESG Analysis (contact@example.com)"  # Required by SEC
 
     # Database
     DATABASE_URL: str = "sqlite:///./gaia.db"

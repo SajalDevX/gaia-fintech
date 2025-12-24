@@ -1,14 +1,12 @@
 """
-Sentinel Agent - Satellite and Environmental Monitoring
-Analyzes satellite imagery, environmental data, and geospatial information
-to detect deforestation, pollution, facility expansion, and environmental risks.
+Sentinel Agent - Environmental Monitoring
+Analyzes environmental data, pollution, deforestation, and climate risks
+using LLM-powered analysis and web grounding.
 """
 
 import asyncio
-import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
-import numpy as np
 from dataclasses import dataclass
 
 from .base_agent import (
@@ -18,50 +16,52 @@ from .base_agent import (
     Evidence,
     EvidenceType,
 )
+from .prompts import get_system_prompt, format_template
+from utils.llm_client import GeminiClient, get_gemini_client
+from models.llm_outputs import (
+    EnvironmentalAnalysisResult,
+    EnvironmentalFinding,
+    DeforestationFinding,
+    PollutionFinding,
+    LLMFinding,
+)
 
 
 @dataclass
-class SatelliteImage:
-    """Simulated satellite image data."""
-    timestamp: datetime
-    coordinates: Tuple[float, float]  # (lat, lon)
-    resolution_meters: float
-    cloud_cover_percent: float
-    spectral_bands: Dict[str, np.ndarray]  # Band name -> data
-    metadata: Dict[str, Any]
-
-
-@dataclass
-class EnvironmentalMetric:
-    """Environmental measurement data."""
+class EnvironmentalData:
+    """Environmental data point."""
     metric_name: str
     value: float
     unit: str
-    timestamp: datetime
-    location: Tuple[float, float]
     source: str
-    quality_score: float  # 0.0 to 1.0
+    timestamp: datetime
+    location: Optional[str] = None
+    confidence: float = 0.8
 
 
 class SentinelAgent(BaseAgent):
     """
-    Sentinel Agent - Environmental and Satellite Monitoring
+    Sentinel Agent - Environmental Monitoring
+
+    Uses Gemini LLM for environmental analysis based on available data
+    and knowledge about the company's environmental practices.
 
     Capabilities:
-    - Satellite imagery analysis (simulated)
-    - Deforestation detection using NDVI changes
-    - Pollution monitoring (air, water, soil)
-    - Facility expansion detection
-    - Environmental risk scoring
-    - Integration with NASA/ESA data sources (simulated)
+    - Environmental impact analysis using LLM
+    - Deforestation and land use assessment
+    - Pollution and emissions evaluation
+    - Climate risk assessment
+    - Biodiversity impact analysis
+    - Facility and operations environmental footprint
     """
 
     def __init__(
         self,
         name: str = "Sentinel",
-        timeout_seconds: int = 60,
+        timeout_seconds: int = 120,
         max_retries: int = 3,
         enable_debug: bool = False,
+        llm_client: GeminiClient = None,
     ):
         super().__init__(
             name=name,
@@ -71,19 +71,15 @@ class SentinelAgent(BaseAgent):
             enable_debug=enable_debug,
         )
 
-        # Simulated satellite data sources
-        self.satellite_sources = [
-            "Sentinel-2",
-            "Landsat-8",
-            "MODIS",
-            "Planet Labs",
-            "Copernicus",
-        ]
+        self.llm_client = llm_client or get_gemini_client()
+        self.system_prompt = get_system_prompt("sentinel")
 
-        # Environmental thresholds
-        self.deforestation_threshold = 0.15  # 15% NDVI decrease
-        self.pollution_threshold = 75.0  # AQI threshold
-        self.expansion_threshold = 0.20  # 20% area increase
+        # Environmental thresholds for severity assessment
+        self.severity_thresholds = {
+            "carbon_intensity_high": 500,  # kg CO2 per $1000 revenue
+            "water_intensity_high": 100,  # m3 per $1000 revenue
+            "waste_intensity_high": 50,  # kg per $1000 revenue
+        }
 
     async def analyze(
         self,
@@ -91,11 +87,11 @@ class SentinelAgent(BaseAgent):
         context: Optional[Dict[str, Any]] = None,
     ) -> AgentReport:
         """
-        Perform comprehensive environmental analysis.
+        Perform comprehensive environmental analysis using LLM.
 
         Args:
             target_entity: Company or facility name
-            context: Optional context including coordinates, time range, etc.
+            context: Optional context including industry, location, etc.
 
         Returns:
             AgentReport with environmental findings
@@ -107,30 +103,32 @@ class SentinelAgent(BaseAgent):
         )
 
         try:
-            # Extract context
-            coordinates = context.get("coordinates") if context else None
-            time_range_days = context.get("time_range_days", 365) if context else 365
+            industry = context.get("industry", "Unknown") if context else "Unknown"
+            location = context.get("location", "Global operations") if context else "Global operations"
 
-            # If no coordinates provided, simulate based on entity
-            if not coordinates:
-                coordinates = self._simulate_facility_coordinates(target_entity)
+            self.logger.info(
+                "sentinel_analysis_start",
+                target=target_entity,
+                industry=industry,
+            )
 
-            # Parallel data collection
-            evidence_tasks = [
-                self._analyze_deforestation(target_entity, coordinates, time_range_days),
-                self._analyze_pollution(target_entity, coordinates, time_range_days),
-                self._analyze_facility_expansion(target_entity, coordinates, time_range_days),
-                self._analyze_water_quality(target_entity, coordinates, time_range_days),
-                self._analyze_biodiversity_impact(target_entity, coordinates, time_range_days),
+            # Parallel environmental analysis tasks
+            analysis_tasks = [
+                self._analyze_carbon_footprint(target_entity, industry, context),
+                self._analyze_pollution(target_entity, industry, context),
+                self._analyze_deforestation(target_entity, industry, context),
+                self._analyze_water_management(target_entity, industry, context),
+                self._analyze_biodiversity(target_entity, industry, context),
+                self._analyze_climate_risk(target_entity, industry, context),
             ]
 
-            evidence_results = await asyncio.gather(*evidence_tasks, return_exceptions=True)
+            results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
 
             # Process results
-            for result in evidence_results:
+            for result in results:
                 if isinstance(result, Exception):
                     self.logger.warning(
-                        "analysis_task_failed",
+                        "environmental_task_failed",
                         error=str(result),
                     )
                     report.errors.append(f"Task failed: {str(result)}")
@@ -139,10 +137,10 @@ class SentinelAgent(BaseAgent):
 
             # Add metadata
             report.metadata = {
-                "coordinates": coordinates,
-                "time_range_days": time_range_days,
-                "satellite_sources": self.satellite_sources,
+                "industry": industry,
+                "location": location,
                 "analysis_timestamp": datetime.utcnow().isoformat(),
+                "analysis_method": "LLM-based environmental assessment",
             }
 
         except Exception as e:
@@ -161,7 +159,7 @@ class SentinelAgent(BaseAgent):
         context: Optional[Dict[str, Any]] = None,
     ) -> List[Evidence]:
         """
-        Collect satellite and environmental data.
+        Collect environmental data using LLM analysis.
 
         Args:
             target_entity: Entity to collect data for
@@ -173,50 +171,36 @@ class SentinelAgent(BaseAgent):
         evidence_list = []
 
         try:
-            coordinates = context.get("coordinates") if context else None
-            if not coordinates:
-                coordinates = self._simulate_facility_coordinates(target_entity)
+            # Use LLM to gather environmental information
+            data_prompt = f"""Research and compile available environmental data for {target_entity}.
 
-            # Simulate satellite imagery collection
-            satellite_images = await self._fetch_satellite_imagery(
-                coordinates,
-                days_back=365,
+Look for:
+1. Carbon emissions and climate commitments
+2. Environmental certifications (ISO 14001, etc.)
+3. Sustainability reports and disclosures
+4. Environmental violations or fines
+5. Renewable energy usage
+6. Water and waste management practices
+
+Provide specific data points with sources where known."""
+
+            result = await self.llm_client.analyze_with_search(
+                query=f"{target_entity} environmental sustainability emissions carbon footprint",
+                context=data_prompt,
             )
 
-            for img in satellite_images:
-                evidence = Evidence(
-                    type=EvidenceType.SATELLITE_IMAGE,
-                    source=img.metadata.get("source", "Unknown"),
-                    description=f"Satellite image from {img.timestamp.date()}",
-                    data={
-                        "coordinates": img.coordinates,
-                        "resolution_meters": img.resolution_meters,
-                        "cloud_cover": img.cloud_cover_percent,
-                        "bands_available": list(img.spectral_bands.keys()),
-                    },
-                    timestamp=img.timestamp,
-                    confidence=self._calculate_image_quality(img),
-                    metadata=img.metadata,
-                )
-                evidence_list.append(evidence)
-
-            # Collect environmental sensor data
-            sensor_data = await self._fetch_environmental_sensors(coordinates)
-            for metric in sensor_data:
-                evidence = Evidence(
-                    type=EvidenceType.SENSOR_DATA,
-                    source=metric.source,
-                    description=f"{metric.metric_name}: {metric.value} {metric.unit}",
-                    data={
-                        "metric": metric.metric_name,
-                        "value": metric.value,
-                        "unit": metric.unit,
-                        "location": metric.location,
-                    },
-                    timestamp=metric.timestamp,
-                    confidence=metric.quality_score,
-                )
-                evidence_list.append(evidence)
+            evidence = Evidence(
+                type=EvidenceType.API_RESPONSE,
+                source="Environmental Research (LLM)",
+                description=f"Environmental data compilation for {target_entity}",
+                data={
+                    "analysis": result.get("analysis", ""),
+                    "query": result.get("query", ""),
+                },
+                timestamp=datetime.utcnow(),
+                confidence=0.75,
+            )
+            evidence_list.append(evidence)
 
         except Exception as e:
             self.logger.error("data_collection_error", error=str(e))
@@ -228,308 +212,317 @@ class SentinelAgent(BaseAgent):
         evidence: List[Evidence],
         context: Optional[Dict[str, Any]] = None,
     ) -> float:
-        """
-        Calculate confidence score based on evidence quality and quantity.
-
-        Args:
-            evidence: List of collected evidence
-            context: Additional context
-
-        Returns:
-            Confidence score (0.0 to 1.0)
-        """
+        """Calculate confidence based on evidence quality."""
         if not evidence:
             return 0.0
 
-        # Base confidence on average evidence confidence
         avg_confidence = sum(e.confidence for e in evidence) / len(evidence)
 
         # Bonus for multiple evidence sources
         unique_sources = len(set(e.source for e in evidence))
         source_bonus = min(0.2, unique_sources * 0.05)
 
-        # Penalty for old data
-        latest_timestamp = max(e.timestamp for e in evidence)
-        age_days = (datetime.utcnow() - latest_timestamp).days
-        age_penalty = min(0.2, age_days * 0.001)
+        return min(1.0, avg_confidence + source_bonus)
 
-        final_confidence = min(1.0, avg_confidence + source_bonus - age_penalty)
-        return final_confidence
-
-    # Private analysis methods
-
-    async def _analyze_deforestation(
+    async def _analyze_carbon_footprint(
         self,
         target_entity: str,
-        coordinates: Tuple[float, float],
-        time_range_days: int,
+        industry: str,
+        context: Optional[Dict[str, Any]],
     ) -> Finding:
-        """Analyze deforestation patterns using NDVI changes."""
+        """Analyze carbon footprint and emissions using LLM."""
         finding = Finding(
             agent_name=self.name,
-            finding_type="deforestation",
-            title="Deforestation Analysis",
+            finding_type="carbon_emissions",
+            title="Carbon Footprint Analysis",
         )
 
         try:
-            # Simulate NDVI calculation over time
-            current_ndvi = random.uniform(0.3, 0.8)  # Healthy vegetation: 0.5-0.8
-            historical_ndvi = current_ndvi + random.uniform(-0.3, 0.1)
+            carbon_prompt = f"""Analyze the carbon footprint and emissions profile of {target_entity}.
 
-            ndvi_change = (current_ndvi - historical_ndvi) / historical_ndvi
-            forest_loss_hectares = abs(ndvi_change) * random.uniform(100, 5000)
+Industry: {industry}
 
-            # Create evidence
+Assess:
+1. **Scope 1 Emissions** (direct emissions from owned sources)
+2. **Scope 2 Emissions** (indirect from purchased energy)
+3. **Scope 3 Emissions** (value chain emissions)
+4. **Carbon reduction commitments** (net-zero targets, SBTi)
+5. **Renewable energy adoption**
+6. **Carbon intensity** compared to industry peers
+
+Provide specific numbers if known, otherwise give qualitative assessment.
+Rate severity: CRITICAL (major polluter), HIGH (above average), MEDIUM (average), LOW (below average), INFO (leader).
+Include confidence score (0.0-1.0) based on data availability."""
+
+            result = await self.llm_client.generate_text(
+                prompt=carbon_prompt,
+                system_prompt=self.system_prompt,
+                temperature=0.3,
+            )
+
             evidence = Evidence(
-                type=EvidenceType.SATELLITE_IMAGE,
-                source=random.choice(self.satellite_sources),
-                description=f"NDVI analysis over {time_range_days} days",
+                type=EvidenceType.API_RESPONSE,
+                source="Carbon Footprint Analysis (LLM)",
+                description="Comprehensive carbon emissions assessment",
                 data={
-                    "current_ndvi": round(current_ndvi, 3),
-                    "historical_ndvi": round(historical_ndvi, 3),
-                    "ndvi_change_percent": round(ndvi_change * 100, 2),
-                    "estimated_forest_loss_hectares": round(forest_loss_hectares, 2),
-                    "coordinates": coordinates,
+                    "analysis": result,
+                    "industry": industry,
                 },
-                confidence=0.85,
+                confidence=0.75,
             )
             finding.add_evidence(evidence)
 
-            # Determine severity
-            if ndvi_change < -self.deforestation_threshold:
+            # Parse severity from response (simplified - could use structured output)
+            result_lower = result.lower()
+            if "critical" in result_lower or "major polluter" in result_lower:
+                finding.severity = "CRITICAL"
+                finding.description = f"Critical carbon emissions concerns for {target_entity}. Significant climate risk."
+            elif "high" in result_lower[:500] or "above average" in result_lower:
                 finding.severity = "HIGH"
-                finding.description = (
-                    f"Significant deforestation detected near {target_entity} facilities. "
-                    f"NDVI decreased by {abs(ndvi_change)*100:.1f}%, indicating loss of "
-                    f"approximately {forest_loss_hectares:.0f} hectares of forest cover."
-                )
-            elif ndvi_change < -0.05:
-                finding.severity = "MEDIUM"
-                finding.description = (
-                    f"Moderate vegetation loss detected near {target_entity}. "
-                    f"NDVI change: {ndvi_change*100:.1f}%"
-                )
-            else:
+                finding.description = f"Above-average carbon footprint for {target_entity}. Improvement needed."
+            elif "low" in result_lower[:500] or "below average" in result_lower or "leader" in result_lower:
                 finding.severity = "LOW"
-                finding.description = (
-                    f"Minimal vegetation change detected near {target_entity}. "
-                    f"Forest cover appears stable."
-                )
+                finding.description = f"Below-average carbon footprint for {target_entity}. Good environmental performance."
+            else:
+                finding.severity = "MEDIUM"
+                finding.description = f"Average carbon footprint for {target_entity} in {industry} industry."
+
+            finding.confidence_score = 0.75
 
         except Exception as e:
+            self.logger.error("carbon_analysis_error", error=str(e))
             finding.severity = "INFO"
-            finding.description = f"Unable to complete deforestation analysis: {str(e)}"
-            finding.confidence_score = 0.0
+            finding.description = f"Unable to analyze carbon footprint: {str(e)}"
+            finding.confidence_score = 0.3
 
         return finding
 
     async def _analyze_pollution(
         self,
         target_entity: str,
-        coordinates: Tuple[float, float],
-        time_range_days: int,
+        industry: str,
+        context: Optional[Dict[str, Any]],
     ) -> Finding:
-        """Analyze pollution levels (air, water, emissions)."""
+        """Analyze pollution and environmental contamination."""
         finding = Finding(
             agent_name=self.name,
             finding_type="pollution",
-            title="Pollution Monitoring",
+            title="Pollution and Contamination Assessment",
         )
 
         try:
-            # Simulate pollution metrics
-            aqi = random.uniform(20, 150)  # Air Quality Index
-            water_contamination = random.uniform(0, 100)  # Contamination score
-            co2_emissions_tons = random.uniform(1000, 50000)
+            pollution_prompt = f"""Analyze pollution and environmental contamination risks for {target_entity}.
 
-            # Air quality evidence
-            air_evidence = Evidence(
-                type=EvidenceType.SENSOR_DATA,
-                source="EPA Air Quality Monitor",
-                description=f"Air Quality Index near facility",
-                data={
-                    "aqi": round(aqi, 1),
-                    "pollutants": {
-                        "pm25": random.uniform(5, 50),
-                        "pm10": random.uniform(10, 80),
-                        "no2": random.uniform(5, 40),
-                        "so2": random.uniform(2, 30),
-                        "co": random.uniform(0.5, 5),
-                    },
-                    "coordinates": coordinates,
-                },
-                confidence=0.88,
+Industry: {industry}
+
+Assess:
+1. **Air Pollution** - emissions, particulates, toxic releases (TRI data if available)
+2. **Water Pollution** - discharge, contamination incidents, water quality impacts
+3. **Soil Contamination** - hazardous waste, remediation sites
+4. **Regulatory Violations** - EPA fines, environmental penalties
+5. **Community Impact** - proximity to vulnerable communities
+
+Look for any reported environmental incidents, Superfund sites, or consent decrees.
+Rate severity based on actual violations and potential harm."""
+
+            result = await self.llm_client.generate_text(
+                prompt=pollution_prompt,
+                system_prompt=self.system_prompt,
+                temperature=0.3,
             )
-            finding.add_evidence(air_evidence)
 
-            # Water quality evidence
-            water_evidence = Evidence(
-                type=EvidenceType.SENSOR_DATA,
-                source="Water Quality Monitoring Network",
-                description="Water contamination analysis",
-                data={
-                    "contamination_score": round(water_contamination, 1),
-                    "heavy_metals_ppb": {
-                        "lead": random.uniform(0, 15),
-                        "mercury": random.uniform(0, 2),
-                        "cadmium": random.uniform(0, 5),
-                    },
-                    "ph_level": random.uniform(6.5, 8.5),
-                },
-                confidence=0.82,
+            evidence = Evidence(
+                type=EvidenceType.API_RESPONSE,
+                source="Pollution Analysis (LLM)",
+                description="Environmental pollution assessment",
+                data={"analysis": result},
+                confidence=0.72,
             )
-            finding.add_evidence(water_evidence)
+            finding.add_evidence(evidence)
 
-            # Determine severity
-            if aqi > self.pollution_threshold or water_contamination > 60:
+            # Assess severity
+            result_lower = result.lower()
+            violation_indicators = ["violation", "fine", "penalty", "contamination", "spill", "superfund"]
+            violation_count = sum(1 for indicator in violation_indicators if indicator in result_lower)
+
+            if violation_count >= 3 or "critical" in result_lower:
                 finding.severity = "CRITICAL"
-                finding.description = (
-                    f"Critical pollution levels detected near {target_entity}. "
-                    f"AQI: {aqi:.0f}, Water contamination: {water_contamination:.0f}/100. "
-                    f"Immediate environmental action required."
-                )
-            elif aqi > 50 or water_contamination > 30:
-                finding.severity = "MEDIUM"
-                finding.description = (
-                    f"Elevated pollution levels near {target_entity}. "
-                    f"AQI: {aqi:.0f}, Water quality concerns present."
-                )
-            else:
-                finding.severity = "LOW"
-                finding.description = (
-                    f"Pollution levels within acceptable ranges for {target_entity}. "
-                    f"AQI: {aqi:.0f}"
-                )
-
-        except Exception as e:
-            finding.severity = "INFO"
-            finding.description = f"Unable to complete pollution analysis: {str(e)}"
-
-        return finding
-
-    async def _analyze_facility_expansion(
-        self,
-        target_entity: str,
-        coordinates: Tuple[float, float],
-        time_range_days: int,
-    ) -> Finding:
-        """Detect facility expansion using change detection."""
-        finding = Finding(
-            agent_name=self.name,
-            finding_type="facility_expansion",
-            title="Facility Expansion Detection",
-        )
-
-        try:
-            # Simulate area change detection
-            current_area_sqm = random.uniform(50000, 500000)
-            historical_area_sqm = current_area_sqm * random.uniform(0.7, 1.1)
-            area_change = (current_area_sqm - historical_area_sqm) / historical_area_sqm
-
-            evidence = Evidence(
-                type=EvidenceType.SATELLITE_IMAGE,
-                source=random.choice(self.satellite_sources),
-                description="Facility area change detection",
-                data={
-                    "current_area_sqm": round(current_area_sqm, 2),
-                    "historical_area_sqm": round(historical_area_sqm, 2),
-                    "area_change_percent": round(area_change * 100, 2),
-                    "analysis_period_days": time_range_days,
-                    "detection_method": "Multi-temporal classification",
-                },
-                confidence=0.79,
-            )
-            finding.add_evidence(evidence)
-
-            if area_change > self.expansion_threshold:
-                finding.severity = "MEDIUM"
-                finding.description = (
-                    f"Significant facility expansion detected for {target_entity}. "
-                    f"Area increased by {area_change*100:.1f}% ({(current_area_sqm - historical_area_sqm):.0f} sqm). "
-                    f"Potential environmental impact requires assessment."
-                )
-            elif area_change > 0.05:
-                finding.severity = "LOW"
-                finding.description = (
-                    f"Minor facility expansion detected for {target_entity}. "
-                    f"Area change: {area_change*100:.1f}%"
-                )
-            else:
-                finding.severity = "INFO"
-                finding.description = f"No significant facility expansion detected for {target_entity}."
-
-        except Exception as e:
-            finding.severity = "INFO"
-            finding.description = f"Unable to complete expansion analysis: {str(e)}"
-
-        return finding
-
-    async def _analyze_water_quality(
-        self,
-        target_entity: str,
-        coordinates: Tuple[float, float],
-        time_range_days: int,
-    ) -> Finding:
-        """Analyze water quality in surrounding area."""
-        finding = Finding(
-            agent_name=self.name,
-            finding_type="water_quality",
-            title="Water Quality Assessment",
-        )
-
-        try:
-            # Simulate water quality metrics
-            water_quality_index = random.uniform(30, 95)
-            turbidity = random.uniform(0, 50)  # NTU
-            dissolved_oxygen = random.uniform(4, 12)  # mg/L
-
-            evidence = Evidence(
-                type=EvidenceType.SENSOR_DATA,
-                source="Hydrological Monitoring Network",
-                description="Water quality analysis",
-                data={
-                    "water_quality_index": round(water_quality_index, 1),
-                    "turbidity_ntu": round(turbidity, 2),
-                    "dissolved_oxygen_mg_l": round(dissolved_oxygen, 2),
-                    "temperature_celsius": round(random.uniform(15, 25), 1),
-                    "conductivity_us_cm": round(random.uniform(100, 800), 0),
-                },
-                confidence=0.81,
-            )
-            finding.add_evidence(evidence)
-
-            if water_quality_index < 50:
+                finding.description = f"Significant pollution concerns for {target_entity}. Multiple violations or contamination issues identified."
+            elif violation_count >= 2:
                 finding.severity = "HIGH"
-                finding.description = (
-                    f"Poor water quality detected near {target_entity} facilities. "
-                    f"WQI: {water_quality_index:.0f}/100. Potential contamination risk."
-                )
-            elif water_quality_index < 70:
+                finding.description = f"Elevated pollution risks for {target_entity}. Environmental incidents or violations noted."
+            elif violation_count >= 1:
                 finding.severity = "MEDIUM"
-                finding.description = (
-                    f"Moderate water quality concerns near {target_entity}. "
-                    f"WQI: {water_quality_index:.0f}/100"
-                )
+                finding.description = f"Some pollution concerns for {target_entity}. Minor issues identified."
             else:
                 finding.severity = "LOW"
-                finding.description = (
-                    f"Water quality acceptable near {target_entity}. "
-                    f"WQI: {water_quality_index:.0f}/100"
-                )
+                finding.description = f"Low pollution risk for {target_entity}. No significant violations found."
+
+            finding.confidence_score = 0.72
 
         except Exception as e:
+            self.logger.error("pollution_analysis_error", error=str(e))
             finding.severity = "INFO"
-            finding.description = f"Unable to complete water quality analysis: {str(e)}"
+            finding.description = f"Unable to analyze pollution: {str(e)}"
 
         return finding
 
-    async def _analyze_biodiversity_impact(
+    async def _analyze_deforestation(
         self,
         target_entity: str,
-        coordinates: Tuple[float, float],
-        time_range_days: int,
+        industry: str,
+        context: Optional[Dict[str, Any]],
     ) -> Finding:
-        """Assess biodiversity impact."""
+        """Analyze deforestation and land use impacts."""
+        finding = Finding(
+            agent_name=self.name,
+            finding_type="deforestation",
+            title="Deforestation and Land Use Analysis",
+        )
+
+        try:
+            # Industries with high deforestation risk
+            high_risk_industries = [
+                "agriculture", "palm oil", "soy", "cattle", "timber",
+                "paper", "pulp", "rubber", "cocoa", "coffee", "mining"
+            ]
+
+            is_high_risk = any(ind in industry.lower() for ind in high_risk_industries)
+
+            deforestation_prompt = f"""Analyze deforestation and land use impacts for {target_entity}.
+
+Industry: {industry}
+High-risk industry for deforestation: {is_high_risk}
+
+Assess:
+1. **Direct Land Use** - facility footprint, land conversion
+2. **Supply Chain Deforestation** - commodity sourcing from high-risk regions
+3. **Zero-Deforestation Commitments** - policies, deadlines, progress
+4. **Certifications** - FSC, RSPO, Rainforest Alliance, etc.
+5. **Monitoring Systems** - satellite monitoring, traceability
+6. **High-Risk Sourcing Regions** - Amazon, Indonesia, Congo Basin exposure
+
+Look for any deforestation allegations or controversies."""
+
+            result = await self.llm_client.generate_text(
+                prompt=deforestation_prompt,
+                system_prompt=self.system_prompt,
+                temperature=0.3,
+            )
+
+            evidence = Evidence(
+                type=EvidenceType.API_RESPONSE,
+                source="Deforestation Analysis (LLM)",
+                description="Land use and deforestation assessment",
+                data={
+                    "analysis": result,
+                    "high_risk_industry": is_high_risk,
+                },
+                confidence=0.70,
+            )
+            finding.add_evidence(evidence)
+
+            # Assess severity
+            result_lower = result.lower()
+            if "deforestation" in result_lower and ("linked" in result_lower or "associated" in result_lower or "caused" in result_lower):
+                finding.severity = "CRITICAL"
+                finding.description = f"Direct deforestation linkage identified for {target_entity}. Major environmental concern."
+            elif is_high_risk and "no commitment" in result_lower:
+                finding.severity = "HIGH"
+                finding.description = f"High deforestation risk for {target_entity} in {industry} industry. No clear zero-deforestation commitment."
+            elif is_high_risk:
+                finding.severity = "MEDIUM"
+                finding.description = f"Moderate deforestation risk for {target_entity}. Industry exposure requires monitoring."
+            else:
+                finding.severity = "LOW"
+                finding.description = f"Low deforestation risk for {target_entity}. Not in high-risk industry."
+
+            finding.confidence_score = 0.70
+
+        except Exception as e:
+            self.logger.error("deforestation_analysis_error", error=str(e))
+            finding.severity = "INFO"
+            finding.description = f"Unable to analyze deforestation: {str(e)}"
+
+        return finding
+
+    async def _analyze_water_management(
+        self,
+        target_entity: str,
+        industry: str,
+        context: Optional[Dict[str, Any]],
+    ) -> Finding:
+        """Analyze water usage and management."""
+        finding = Finding(
+            agent_name=self.name,
+            finding_type="water_management",
+            title="Water Management Assessment",
+        )
+
+        try:
+            water_prompt = f"""Analyze water management practices for {target_entity}.
+
+Industry: {industry}
+
+Assess:
+1. **Water Consumption** - total usage, intensity metrics
+2. **Water Stress Exposure** - operations in water-scarce regions
+3. **Water Recycling** - reuse rates, efficiency improvements
+4. **Discharge Quality** - treatment, compliance with permits
+5. **Water Stewardship** - community water programs, watershed protection
+6. **CDP Water Security** - disclosure and ratings if available
+
+Industries like beverage, agriculture, mining, and semiconductors are water-intensive."""
+
+            result = await self.llm_client.generate_text(
+                prompt=water_prompt,
+                system_prompt=self.system_prompt,
+                temperature=0.3,
+            )
+
+            evidence = Evidence(
+                type=EvidenceType.API_RESPONSE,
+                source="Water Management Analysis (LLM)",
+                description="Water usage and stewardship assessment",
+                data={"analysis": result},
+                confidence=0.72,
+            )
+            finding.add_evidence(evidence)
+
+            # Water-intensive industries
+            water_intensive = ["beverage", "agriculture", "mining", "semiconductor", "textile", "food"]
+            is_water_intensive = any(ind in industry.lower() for ind in water_intensive)
+
+            result_lower = result.lower()
+            if "water stress" in result_lower and "high" in result_lower:
+                finding.severity = "HIGH"
+                finding.description = f"High water stress exposure for {target_entity}. Water scarcity risk."
+            elif is_water_intensive and "poor" in result_lower:
+                finding.severity = "HIGH"
+                finding.description = f"Poor water management in water-intensive {industry} industry for {target_entity}."
+            elif is_water_intensive:
+                finding.severity = "MEDIUM"
+                finding.description = f"Water management monitoring needed for {target_entity} in water-intensive industry."
+            else:
+                finding.severity = "LOW"
+                finding.description = f"Adequate water management for {target_entity}."
+
+            finding.confidence_score = 0.72
+
+        except Exception as e:
+            self.logger.error("water_analysis_error", error=str(e))
+            finding.severity = "INFO"
+            finding.description = f"Unable to analyze water management: {str(e)}"
+
+        return finding
+
+    async def _analyze_biodiversity(
+        self,
+        target_entity: str,
+        industry: str,
+        context: Optional[Dict[str, Any]],
+    ) -> Finding:
+        """Analyze biodiversity impact."""
         finding = Finding(
             agent_name=self.name,
             finding_type="biodiversity",
@@ -537,126 +530,140 @@ class SentinelAgent(BaseAgent):
         )
 
         try:
-            # Simulate biodiversity metrics
-            species_richness_change = random.uniform(-30, 10)  # Percent change
-            habitat_fragmentation = random.uniform(0, 100)
+            biodiversity_prompt = f"""Analyze biodiversity impact for {target_entity}.
+
+Industry: {industry}
+
+Assess:
+1. **Habitat Impact** - operations near protected areas, critical habitats
+2. **Species Impact** - effects on endangered or threatened species
+3. **Biodiversity Policy** - commitments, no-go zones, offset programs
+4. **TNFD Alignment** - Taskforce on Nature-related Financial Disclosures
+5. **Supply Chain Biodiversity** - sourcing from biodiversity hotspots
+6. **Restoration Programs** - habitat restoration, rewilding efforts
+
+High-risk industries: mining, agriculture, infrastructure, real estate."""
+
+            result = await self.llm_client.generate_text(
+                prompt=biodiversity_prompt,
+                system_prompt=self.system_prompt,
+                temperature=0.3,
+            )
 
             evidence = Evidence(
-                type=EvidenceType.SENSOR_DATA,
-                source="Biodiversity Monitoring Program",
-                description="Biodiversity impact analysis",
-                data={
-                    "species_richness_change_percent": round(species_richness_change, 1),
-                    "habitat_fragmentation_index": round(habitat_fragmentation, 1),
-                    "protected_areas_nearby": random.choice([True, False]),
-                    "endangered_species_present": random.choice([True, False]),
-                },
-                confidence=0.72,
+                type=EvidenceType.API_RESPONSE,
+                source="Biodiversity Analysis (LLM)",
+                description="Biodiversity impact assessment",
+                data={"analysis": result},
+                confidence=0.68,
             )
             finding.add_evidence(evidence)
 
-            if species_richness_change < -15:
+            result_lower = result.lower()
+            if "endangered" in result_lower and ("harm" in result_lower or "threat" in result_lower):
+                finding.severity = "CRITICAL"
+                finding.description = f"Critical biodiversity impact for {target_entity}. Endangered species at risk."
+            elif "protected area" in result_lower or "critical habitat" in result_lower:
                 finding.severity = "HIGH"
-                finding.description = (
-                    f"Significant biodiversity loss detected near {target_entity}. "
-                    f"Species richness decreased by {abs(species_richness_change):.1f}%."
-                )
-            elif species_richness_change < -5:
+                finding.description = f"Operations near protected areas or critical habitats for {target_entity}."
+            elif any(ind in industry.lower() for ind in ["mining", "agriculture", "infrastructure"]):
                 finding.severity = "MEDIUM"
-                finding.description = (
-                    f"Moderate biodiversity impact near {target_entity}. "
-                    f"Species richness change: {species_richness_change:.1f}%"
-                )
+                finding.description = f"Industry-related biodiversity risk for {target_entity}. Monitoring recommended."
             else:
                 finding.severity = "LOW"
-                finding.description = f"Biodiversity appears stable near {target_entity}."
+                finding.description = f"Low biodiversity impact identified for {target_entity}."
+
+            finding.confidence_score = 0.68
 
         except Exception as e:
+            self.logger.error("biodiversity_analysis_error", error=str(e))
             finding.severity = "INFO"
-            finding.description = f"Unable to complete biodiversity analysis: {str(e)}"
+            finding.description = f"Unable to analyze biodiversity: {str(e)}"
 
         return finding
 
-    # Helper methods
-
-    def _simulate_facility_coordinates(self, target_entity: str) -> Tuple[float, float]:
-        """Generate simulated coordinates based on entity name."""
-        # Use entity name hash to generate consistent coordinates
-        hash_val = hash(target_entity)
-        lat = 20 + (hash_val % 60)  # Lat between 20 and 80
-        lon = -120 + (hash_val % 180)  # Lon between -120 and 60
-        return (float(lat), float(lon))
-
-    async def _fetch_satellite_imagery(
+    async def _analyze_climate_risk(
         self,
-        coordinates: Tuple[float, float],
-        days_back: int = 365,
-    ) -> List[SatelliteImage]:
-        """Simulate fetching satellite imagery."""
-        await asyncio.sleep(0.1)  # Simulate API call
+        target_entity: str,
+        industry: str,
+        context: Optional[Dict[str, Any]],
+    ) -> Finding:
+        """Analyze climate-related risks and opportunities."""
+        finding = Finding(
+            agent_name=self.name,
+            finding_type="climate_risk",
+            title="Climate Risk Assessment",
+        )
 
-        images = []
-        for i in range(5):  # Get 5 images over time period
-            timestamp = datetime.utcnow() - timedelta(days=days_back * (i / 5))
+        try:
+            climate_prompt = f"""Analyze climate-related risks and opportunities for {target_entity}.
 
-            image = SatelliteImage(
-                timestamp=timestamp,
-                coordinates=coordinates,
-                resolution_meters=random.uniform(3, 30),
-                cloud_cover_percent=random.uniform(0, 40),
-                spectral_bands={
-                    "red": np.random.rand(100, 100),
-                    "green": np.random.rand(100, 100),
-                    "blue": np.random.rand(100, 100),
-                    "nir": np.random.rand(100, 100),
-                },
-                metadata={
-                    "source": random.choice(self.satellite_sources),
-                    "scene_id": f"SCENE_{i}_{hash(str(coordinates))}",
-                },
+Industry: {industry}
+
+Assess using TCFD framework:
+1. **Physical Risks**
+   - Acute: extreme weather exposure (hurricanes, floods, wildfires)
+   - Chronic: sea level rise, temperature changes, water scarcity
+
+2. **Transition Risks**
+   - Policy: carbon pricing, regulations
+   - Technology: disruption from clean tech
+   - Market: shifting consumer preferences
+   - Reputation: stakeholder concerns
+
+3. **Climate Opportunities**
+   - Clean technology investments
+   - New market opportunities
+   - Resource efficiency gains
+
+4. **Climate Governance**
+   - Board oversight
+   - Climate targets and progress
+   - TCFD disclosure quality
+
+Rate overall climate risk exposure."""
+
+            result = await self.llm_client.generate_text(
+                prompt=climate_prompt,
+                system_prompt=self.system_prompt,
+                temperature=0.3,
             )
-            images.append(image)
 
-        return images
-
-    async def _fetch_environmental_sensors(
-        self,
-        coordinates: Tuple[float, float],
-    ) -> List[EnvironmentalMetric]:
-        """Simulate fetching environmental sensor data."""
-        await asyncio.sleep(0.1)  # Simulate API call
-
-        metrics = []
-        metric_definitions = [
-            ("air_temperature", "celsius", 15, 35),
-            ("relative_humidity", "percent", 30, 90),
-            ("wind_speed", "m/s", 0, 20),
-            ("precipitation", "mm", 0, 50),
-        ]
-
-        for metric_name, unit, min_val, max_val in metric_definitions:
-            metric = EnvironmentalMetric(
-                metric_name=metric_name,
-                value=random.uniform(min_val, max_val),
-                unit=unit,
-                timestamp=datetime.utcnow(),
-                location=coordinates,
-                source="Environmental Sensor Network",
-                quality_score=random.uniform(0.7, 0.95),
+            evidence = Evidence(
+                type=EvidenceType.API_RESPONSE,
+                source="Climate Risk Analysis (LLM)",
+                description="TCFD-aligned climate risk assessment",
+                data={"analysis": result},
+                confidence=0.75,
             )
-            metrics.append(metric)
+            finding.add_evidence(evidence)
 
-        return metrics
+            # High transition risk industries
+            high_transition_risk = ["oil", "gas", "coal", "automotive", "aviation", "shipping", "steel", "cement"]
+            is_high_transition = any(ind in industry.lower() for ind in high_transition_risk)
 
-    def _calculate_image_quality(self, image: SatelliteImage) -> float:
-        """Calculate quality score for satellite image."""
-        # Lower cloud cover = higher quality
-        cloud_penalty = image.cloud_cover_percent / 100 * 0.3
+            result_lower = result.lower()
+            if is_high_transition and "no plan" in result_lower:
+                finding.severity = "CRITICAL"
+                finding.description = f"Critical climate transition risk for {target_entity}. High-carbon industry without clear transition plan."
+            elif is_high_transition:
+                finding.severity = "HIGH"
+                finding.description = f"High climate transition risk for {target_entity} in {industry} industry."
+            elif "physical risk" in result_lower and "high" in result_lower:
+                finding.severity = "HIGH"
+                finding.description = f"Significant physical climate risk exposure for {target_entity}."
+            elif "opportunity" in result_lower and "leader" in result_lower:
+                finding.severity = "LOW"
+                finding.description = f"Well-positioned for climate transition. {target_entity} shows climate leadership."
+            else:
+                finding.severity = "MEDIUM"
+                finding.description = f"Moderate climate risk for {target_entity}. Transition planning recommended."
 
-        # Higher resolution = higher quality
-        resolution_score = min(1.0, 30 / image.resolution_meters) * 0.2
+            finding.confidence_score = 0.75
 
-        base_quality = 0.7
-        quality = base_quality - cloud_penalty + resolution_score
+        except Exception as e:
+            self.logger.error("climate_analysis_error", error=str(e))
+            finding.severity = "INFO"
+            finding.description = f"Unable to analyze climate risk: {str(e)}"
 
-        return min(1.0, max(0.0, quality))
+        return finding

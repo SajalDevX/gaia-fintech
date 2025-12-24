@@ -8,6 +8,7 @@ from routes.analysis import router as analysis_router
 from routes.companies import router as companies_router
 from routes.sdg import router as sdg_router
 from routes.inclusion import router as inclusion_router
+from routes.blockchain import router as blockchain_router
 
 # Create main router
 router = APIRouter()
@@ -35,6 +36,12 @@ router.include_router(
     inclusion_router,
     prefix="/inclusion",
     tags=["Financial Inclusion"]
+)
+
+router.include_router(
+    blockchain_router,
+    prefix="/blockchain",
+    tags=["Blockchain Audit Trail"]
 )
 
 __all__ = ["router"]

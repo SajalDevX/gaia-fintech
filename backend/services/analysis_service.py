@@ -1,16 +1,35 @@
 """
 GAIA Analysis Service
-Core service for orchestrating multi-agent ESG/SDG analysis with adversarial debate
+Core service for orchestrating multi-agent ESG/SDG analysis with real AI agents.
+Uses multi-provider LLM (Gemini, OpenAI, Claude) for load-balanced AI reasoning.
 """
 
 import asyncio
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 import structlog
-from uuid import uuid4
-import json
 
-from config import get_settings, ESG_CATEGORIES, SDG_GOALS, RISK_LEVELS
+from config import get_settings, SDG_GOALS, RISK_LEVELS
+
+# Import real AI agents
+from agents.sentinel_agent import SentinelAgent
+# Import blockchain for audit trail
+from utils.blockchain import (
+    get_blockchain,
+    record_agent_finding,
+    record_debate_argument,
+    record_greenwashing_alert,
+    record_consensus,
+    finalize_assessment,
+    get_audit_trail
+)
+from agents.veritas_agent import VeritasAgent
+from agents.pulse_agent import PulseAgent
+from agents.regulus_agent import RegulusAgent
+from agents.impact_agent import ImpactAgent
+from agents.nexus_agent import NexusAgent
+from agents.orchestrator_agent import OrchestratorAgent
+from utils.llm_client import get_multi_llm_client
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -18,57 +37,39 @@ settings = get_settings()
 
 class AnalysisService:
     """
-    Core analysis service that orchestrates the 6-agent system:
-    1. Financial Agent - Company data & financial metrics
-    2. Environmental Agent - Satellite imagery & environmental impact
-    3. Social Agent - Labor practices, human rights, community impact
-    4. Governance Agent - Board structure, ethics, compliance
-    5. Sentiment Agent - News, social media, public perception
-    6. Supply Chain Agent - Supply chain risks & sustainability
+    Core analysis service using real AI agents:
+    1. Sentinel Agent - Environmental monitoring
+    2. Veritas Agent - Supply chain verification
+    3. Pulse Agent - News sentiment analysis
+    4. Regulus Agent - Regulatory compliance
+    5. Impact Agent - SDG impact quantification
+    6. NEXUS Agent - Financial inclusion
+    7. Orchestrator Agent - Adversarial debate & synthesis
 
-    After agents complete their analysis, an adversarial debate is conducted
-    to challenge findings and reach consensus on final assessment.
+    All agents use multi-provider LLM (Gemini, OpenAI, Claude) with load balancing.
     """
 
     def __init__(self):
-        """Initialize the analysis service."""
+        """Initialize the analysis service with real AI agents."""
         self.active_analyses: Dict[str, Dict[str, Any]] = {}
         self.completed_analyses: Dict[str, Dict[str, Any]] = {}
-        self.agent_registry = self._initialize_agents()
+
+        # Initialize multi-provider LLM client
+        self.llm_client = get_multi_llm_client()
+
+        # Initialize real AI agents
+        self.agents = self._initialize_agents()
 
     def _initialize_agents(self) -> Dict[str, Any]:
-        """Initialize the 6-agent system."""
+        """Initialize real AI agents with shared LLM client."""
         return {
-            "financial": {
-                "name": "Financial Analysis Agent",
-                "description": "Analyzes financial data, SEC filings, and company metrics",
-                "priority": 1
-            },
-            "environmental": {
-                "name": "Environmental Impact Agent",
-                "description": "Processes satellite imagery and environmental data",
-                "priority": 2
-            },
-            "social": {
-                "name": "Social Impact Agent",
-                "description": "Evaluates labor practices, human rights, community relations",
-                "priority": 3
-            },
-            "governance": {
-                "name": "Governance Agent",
-                "description": "Assesses board structure, ethics, transparency",
-                "priority": 4
-            },
-            "sentiment": {
-                "name": "Sentiment Analysis Agent",
-                "description": "Analyzes news, social media, and public perception",
-                "priority": 5
-            },
-            "supply_chain": {
-                "name": "Supply Chain Agent",
-                "description": "Evaluates supply chain sustainability and risks",
-                "priority": 6
-            }
+            "sentinel": SentinelAgent(llm_client=self.llm_client),
+            "veritas": VeritasAgent(llm_client=self.llm_client),
+            "pulse": PulseAgent(llm_client=self.llm_client),
+            "regulus": RegulusAgent(llm_client=self.llm_client),
+            "impact": ImpactAgent(llm_client=self.llm_client),
+            "nexus": NexusAgent(llm_client=self.llm_client),
+            "orchestrator": OrchestratorAgent(llm_client=self.llm_client),
         }
 
     async def run_analysis(
@@ -83,29 +84,14 @@ class AnalysisService:
         connection_manager=None
     ) -> Dict[str, Any]:
         """
-        Run complete multi-agent analysis with adversarial debate.
+        Run complete multi-agent analysis with real AI and adversarial debate.
 
-        Args:
-            analysis_id: Unique analysis identifier
-            ticker: Company stock ticker
-            company_name: Optional company name
-            include_satellite: Whether to include satellite analysis
-            include_sentiment: Whether to include sentiment analysis
-            include_supply_chain: Whether to include supply chain analysis
-            debate_rounds: Number of adversarial debate rounds
-            connection_manager: WebSocket connection manager for real-time updates
-
-        Returns:
-            Complete analysis results
+        Uses real LLM calls via Gemini, OpenAI, and Claude with load balancing.
         """
         start_time = datetime.utcnow()
 
         try:
-            logger.info(
-                "starting_analysis",
-                analysis_id=analysis_id,
-                ticker=ticker
-            )
+            logger.info("starting_real_ai_analysis", analysis_id=analysis_id, ticker=ticker)
 
             # Initialize analysis state
             self.active_analyses[analysis_id] = {
@@ -116,7 +102,7 @@ class AnalysisService:
                 "progress": 0.0,
                 "current_stage": "initialization",
                 "completed_agents": [],
-                "pending_agents": list(self.agent_registry.keys()),
+                "pending_agents": ["sentinel", "veritas", "pulse", "regulus", "impact", "nexus"],
                 "results": {},
                 "created_at": start_time,
                 "updated_at": start_time
@@ -128,43 +114,42 @@ class AnalysisService:
                     "type": "status",
                     "status": "started",
                     "progress": 0.0,
-                    "message": f"Starting analysis for {ticker}",
+                    "message": f"Starting real AI analysis for {ticker}",
                     "timestamp": start_time.isoformat()
                 })
 
-            # Phase 1: Run all agents in parallel
+            # Phase 1: Run all AI agents in parallel
             agent_results = await self._run_agents(
-                analysis_id,
-                ticker,
-                company_name,
-                include_satellite,
-                include_sentiment,
-                include_supply_chain,
+                analysis_id, ticker, company_name,
+                include_sentiment, include_supply_chain,
                 connection_manager
             )
 
-            # Phase 2: Adversarial Debate
-            debate_results = await self._run_adversarial_debate(
-                analysis_id,
-                ticker,
-                agent_results,
-                debate_rounds,
-                connection_manager
+            # Phase 2: Run Orchestrator with real LLM adversarial debate
+            orchestrator_result = await self._run_orchestrator(
+                analysis_id, ticker, agent_results, debate_rounds, connection_manager
             )
 
             # Phase 3: Generate Final Assessment
             final_assessment = await self._generate_final_assessment(
-                analysis_id,
-                ticker,
-                company_name,
-                agent_results,
-                debate_results,
-                connection_manager
+                analysis_id, ticker, company_name,
+                agent_results, orchestrator_result, connection_manager
             )
 
             # Mark as completed
             end_time = datetime.utcnow()
             processing_time = (end_time - start_time).total_seconds()
+
+            # Finalize on blockchain
+            blockchain_result = finalize_assessment(
+                company_ticker=ticker,
+                assessment_data={
+                    "overall_score": final_assessment.get("overall_score"),
+                    "risk_level": final_assessment.get("risk_level"),
+                    "agents_completed": list(agent_results.keys()),
+                    "greenwashing_risk": final_assessment.get("greenwashing_risk", 0)
+                }
+            )
 
             final_results = {
                 "analysis_id": analysis_id,
@@ -172,9 +157,13 @@ class AnalysisService:
                 "company_name": company_name or ticker,
                 "status": "completed",
                 "progress": 100.0,
+                "ai_powered": True,
+                "llm_providers": ["gemini", "openai", "claude"],
                 **final_assessment,
                 "agent_results": agent_results,
-                "debate_summary": debate_results,
+                "orchestrator_summary": orchestrator_result,
+                "blockchain": blockchain_result,
+                "audit_trail": get_audit_trail(ticker),
                 "created_at": start_time,
                 "completed_at": end_time,
                 "processing_time": processing_time
@@ -191,12 +180,12 @@ class AnalysisService:
                     "status": "completed",
                     "progress": 100.0,
                     "results": final_results,
-                    "message": f"Analysis completed for {ticker}",
+                    "message": f"AI analysis completed for {ticker}",
                     "timestamp": end_time.isoformat()
                 })
 
             logger.info(
-                "analysis_completed",
+                "real_ai_analysis_completed",
                 analysis_id=analysis_id,
                 ticker=ticker,
                 processing_time=processing_time
@@ -205,15 +194,8 @@ class AnalysisService:
             return final_results
 
         except Exception as e:
-            logger.error(
-                "analysis_failed",
-                analysis_id=analysis_id,
-                ticker=ticker,
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("analysis_failed", analysis_id=analysis_id, error=str(e), exc_info=True)
 
-            # Update status
             if analysis_id in self.active_analyses:
                 self.active_analyses[analysis_id].update({
                     "status": "failed",
@@ -221,13 +203,11 @@ class AnalysisService:
                     "updated_at": datetime.utcnow()
                 })
 
-            # Send error via WebSocket
             if connection_manager:
                 await connection_manager.send_message(analysis_id, {
                     "type": "error",
                     "status": "failed",
                     "error": str(e),
-                    "message": f"Analysis failed for {ticker}",
                     "timestamp": datetime.utcnow().isoformat()
                 })
 
@@ -238,32 +218,16 @@ class AnalysisService:
         analysis_id: str,
         ticker: str,
         company_name: Optional[str],
-        include_satellite: bool,
         include_sentiment: bool,
         include_supply_chain: bool,
         connection_manager
     ) -> Dict[str, Any]:
-        """
-        Run all agents in parallel.
+        """Run all real AI agents in parallel."""
+        logger.info("running_real_ai_agents", analysis_id=analysis_id)
 
-        Args:
-            analysis_id: Analysis identifier
-            ticker: Company ticker
-            company_name: Company name
-            include_satellite: Include satellite analysis
-            include_sentiment: Include sentiment analysis
-            include_supply_chain: Include supply chain analysis
-            connection_manager: WebSocket manager
-
-        Returns:
-            Aggregated agent results
-        """
-        logger.info("running_agents", analysis_id=analysis_id)
-
-        # Update status
         self.active_analyses[analysis_id].update({
             "status": "running_agents",
-            "current_stage": "multi-agent analysis",
+            "current_stage": "multi-agent AI analysis",
             "progress": 10.0,
             "updated_at": datetime.utcnow()
         })
@@ -273,457 +237,297 @@ class AnalysisService:
                 "type": "stage",
                 "stage": "agents",
                 "progress": 10.0,
-                "message": "Running multi-agent analysis",
+                "message": "Running multi-agent AI analysis with load-balanced LLMs",
                 "timestamp": datetime.utcnow().isoformat()
             })
 
-        # Create agent tasks
+        context = {"ticker": ticker, "company_name": company_name, "industry": "Unknown"}
+
+        # Run real AI agents in parallel
         tasks = [
-            self._run_financial_agent(analysis_id, ticker, company_name, connection_manager),
-            self._run_environmental_agent(analysis_id, ticker, include_satellite, connection_manager),
-            self._run_social_agent(analysis_id, ticker, connection_manager),
-            self._run_governance_agent(analysis_id, ticker, connection_manager),
+            self._run_agent("sentinel", ticker, context, "Environmental", 20.0, connection_manager, analysis_id),
+            self._run_agent("regulus", ticker, context, "Regulatory", 30.0, connection_manager, analysis_id),
+            self._run_agent("impact", ticker, context, "SDG Impact", 40.0, connection_manager, analysis_id),
         ]
 
         if include_sentiment:
-            tasks.append(self._run_sentiment_agent(analysis_id, ticker, connection_manager))
+            tasks.append(self._run_agent("pulse", ticker, context, "Sentiment", 50.0, connection_manager, analysis_id))
 
         if include_supply_chain:
-            tasks.append(self._run_supply_chain_agent(analysis_id, ticker, connection_manager))
+            tasks.append(self._run_agent("veritas", ticker, context, "Supply Chain", 60.0, connection_manager, analysis_id))
+            tasks.append(self._run_agent("nexus", ticker, context, "Financial Inclusion", 65.0, connection_manager, analysis_id))
 
-        # Run agents in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Process results
         agent_results = {}
-        for i, result in enumerate(results):
+        for result in results:
             if isinstance(result, Exception):
-                logger.error(f"agent_error", agent_index=i, error=str(result))
-                agent_results[f"agent_{i}"] = {"error": str(result)}
-            else:
+                logger.error("agent_error", error=str(result))
+            elif isinstance(result, dict):
                 agent_results.update(result)
 
         return agent_results
 
-    async def _run_financial_agent(
+    async def _run_agent(
         self,
-        analysis_id: str,
+        agent_name: str,
         ticker: str,
-        company_name: Optional[str],
-        connection_manager
+        context: Dict[str, Any],
+        display_name: str,
+        progress: float,
+        connection_manager,
+        analysis_id: str
     ) -> Dict[str, Any]:
-        """Run financial analysis agent."""
-        logger.info("running_financial_agent", ticker=ticker)
+        """Run a single real AI agent."""
+        try:
+            logger.info(f"running_{agent_name}_agent", ticker=ticker)
 
-        # Simulate agent processing
-        await asyncio.sleep(2)
+            # Notify frontend that agent is starting
+            if connection_manager:
+                await connection_manager.send_message(analysis_id, {
+                    "type": "agent_start",
+                    "agent_id": agent_name,
+                    "agent": display_name,
+                    "task": f"Analyzing {display_name.lower()} factors...",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
 
-        # TODO: Implement actual financial agent
-        result = {
-            "financial": {
-                "agent": "Financial Analysis",
-                "status": "completed",
-                "score": 75.5,
-                "metrics": {
-                    "revenue_growth": 12.5,
-                    "profit_margin": 25.3,
-                    "esg_disclosure_score": 82.0,
-                    "sustainability_investment": 1.2e9
-                },
-                "findings": [
-                    "Strong financial performance with consistent revenue growth",
-                    "Significant investment in sustainability initiatives",
-                    "Comprehensive ESG disclosure in annual reports"
-                ],
-                "risks": [
-                    "Limited transparency in supply chain costs",
-                    "High executive compensation relative to median worker pay"
-                ],
-                "completed_at": datetime.utcnow().isoformat()
+            agent = self.agents[agent_name]
+            report = await agent.analyze(target_entity=ticker, context=context)
+
+            # Convert report to dict
+            result = {
+                agent_name: {
+                    "agent": display_name,
+                    "status": "completed",
+                    "score": 100 - report.overall_risk_score,
+                    "findings": [
+                        {
+                            "title": f.title,
+                            "description": f.description,
+                            "severity": f.severity,
+                            "confidence": f.confidence_score
+                        }
+                        for f in report.findings
+                    ],
+                    "finding_count": len(report.findings),
+                    "errors": report.errors,
+                    "metadata": report.metadata,
+                    "completed_at": datetime.utcnow().isoformat()
+                }
             }
-        }
 
-        # Update progress
-        await self._update_agent_progress(
-            analysis_id,
-            "financial",
-            30.0,
-            connection_manager
-        )
+            # Record findings to blockchain
+            for finding in report.findings:
+                record_agent_finding(
+                    agent_id=agent_name,
+                    company_ticker=ticker,
+                    finding_type=finding.finding_type,
+                    finding_data={"title": finding.title, "description": finding.description},
+                    confidence=finding.confidence_score,
+                    severity=finding.severity
+                )
 
-        return result
+            # Update progress
+            await self._update_agent_progress(analysis_id, agent_name, progress, connection_manager)
 
-    async def _run_environmental_agent(
-        self,
-        analysis_id: str,
-        ticker: str,
-        include_satellite: bool,
-        connection_manager
-    ) -> Dict[str, Any]:
-        """Run environmental analysis agent."""
-        logger.info("running_environmental_agent", ticker=ticker)
+            return result
 
-        await asyncio.sleep(3)
+        except Exception as e:
+            logger.error(f"{agent_name}_agent_error", error=str(e))
+            return {agent_name: {"status": "error", "error": str(e)}}
 
-        # TODO: Implement actual environmental agent with satellite imagery
-        result = {
-            "environmental": {
-                "agent": "Environmental Impact",
-                "status": "completed",
-                "score": 68.2,
-                "satellite_analysis": {
-                    "facilities_analyzed": 15 if include_satellite else 0,
-                    "deforestation_detected": False,
-                    "emissions_estimate": "moderate",
-                    "water_usage": "high"
-                } if include_satellite else None,
-                "metrics": {
-                    "carbon_emissions": 2.5e6,  # tons CO2e
-                    "renewable_energy_pct": 45.0,
-                    "water_efficiency": 72.0,
-                    "waste_recycling_rate": 68.0
-                },
-                "findings": [
-                    "Moderate carbon footprint for sector",
-                    "Increasing renewable energy adoption",
-                    "Strong waste management practices"
-                ],
-                "risks": [
-                    "High water consumption in manufacturing",
-                    "Limited biodiversity protection initiatives"
-                ],
-                "sdg_impact": {
-                    7: 65.0,  # Affordable and Clean Energy
-                    13: 55.0,  # Climate Action
-                    14: 40.0,  # Life Below Water
-                    15: 45.0   # Life on Land
-                },
-                "completed_at": datetime.utcnow().isoformat()
-            }
-        }
-
-        await self._update_agent_progress(
-            analysis_id,
-            "environmental",
-            40.0,
-            connection_manager
-        )
-
-        return result
-
-    async def _run_social_agent(
-        self,
-        analysis_id: str,
-        ticker: str,
-        connection_manager
-    ) -> Dict[str, Any]:
-        """Run social impact analysis agent."""
-        logger.info("running_social_agent", ticker=ticker)
-
-        await asyncio.sleep(2.5)
-
-        # TODO: Implement actual social agent
-        result = {
-            "social": {
-                "agent": "Social Impact",
-                "status": "completed",
-                "score": 82.0,
-                "metrics": {
-                    "employee_satisfaction": 78.0,
-                    "diversity_score": 72.0,
-                    "safety_incidents": 12,  # per 100k hours
-                    "community_investment": 5.5e7  # USD
-                },
-                "findings": [
-                    "Strong employee satisfaction and retention",
-                    "Industry-leading diversity initiatives",
-                    "Significant community investment programs"
-                ],
-                "risks": [
-                    "Allegations of poor labor practices in overseas facilities",
-                    "Limited transparency in supply chain labor conditions"
-                ],
-                "sdg_impact": {
-                    1: 50.0,   # No Poverty
-                    3: 70.0,   # Good Health
-                    4: 65.0,   # Quality Education
-                    5: 75.0,   # Gender Equality
-                    8: 80.0,   # Decent Work
-                    10: 60.0   # Reduced Inequalities
-                },
-                "completed_at": datetime.utcnow().isoformat()
-            }
-        }
-
-        await self._update_agent_progress(
-            analysis_id,
-            "social",
-            50.0,
-            connection_manager
-        )
-
-        return result
-
-    async def _run_governance_agent(
-        self,
-        analysis_id: str,
-        ticker: str,
-        connection_manager
-    ) -> Dict[str, Any]:
-        """Run governance analysis agent."""
-        logger.info("running_governance_agent", ticker=ticker)
-
-        await asyncio.sleep(2)
-
-        # TODO: Implement actual governance agent
-        result = {
-            "governance": {
-                "agent": "Governance Analysis",
-                "status": "completed",
-                "score": 88.5,
-                "metrics": {
-                    "board_independence": 85.0,
-                    "board_diversity": 65.0,
-                    "ethics_score": 92.0,
-                    "transparency_rating": 88.0
-                },
-                "findings": [
-                    "Highly independent board structure",
-                    "Strong ethics and compliance programs",
-                    "Excellent transparency and disclosure"
-                ],
-                "risks": [
-                    "Concentrated voting power structure",
-                    "Limited board expertise in sustainability"
-                ],
-                "sdg_impact": {
-                    16: 85.0,  # Peace, Justice, Strong Institutions
-                    17: 70.0   # Partnerships
-                },
-                "completed_at": datetime.utcnow().isoformat()
-            }
-        }
-
-        await self._update_agent_progress(
-            analysis_id,
-            "governance",
-            60.0,
-            connection_manager
-        )
-
-        return result
-
-    async def _run_sentiment_agent(
-        self,
-        analysis_id: str,
-        ticker: str,
-        connection_manager
-    ) -> Dict[str, Any]:
-        """Run sentiment analysis agent."""
-        logger.info("running_sentiment_agent", ticker=ticker)
-
-        await asyncio.sleep(2.5)
-
-        # TODO: Implement actual sentiment agent
-        result = {
-            "sentiment": {
-                "agent": "Sentiment Analysis",
-                "status": "completed",
-                "score": 72.5,
-                "sources_analyzed": {
-                    "news_articles": 156,
-                    "social_media": 8420,
-                    "reports": 23
-                },
-                "sentiment_breakdown": {
-                    "positive": 58.0,
-                    "neutral": 27.0,
-                    "negative": 15.0
-                },
-                "findings": [
-                    "Generally positive public perception",
-                    "Strong brand reputation for innovation",
-                    "Positive sentiment around sustainability efforts"
-                ],
-                "risks": [
-                    "Recent controversy around labor practices",
-                    "Criticism of environmental impact in some markets"
-                ],
-                "trending_topics": [
-                    "sustainability_initiatives",
-                    "renewable_energy",
-                    "labor_concerns"
-                ],
-                "completed_at": datetime.utcnow().isoformat()
-            }
-        }
-
-        await self._update_agent_progress(
-            analysis_id,
-            "sentiment",
-            70.0,
-            connection_manager
-        )
-
-        return result
-
-    async def _run_supply_chain_agent(
-        self,
-        analysis_id: str,
-        ticker: str,
-        connection_manager
-    ) -> Dict[str, Any]:
-        """Run supply chain analysis agent."""
-        logger.info("running_supply_chain_agent", ticker=ticker)
-
-        await asyncio.sleep(3)
-
-        # TODO: Implement actual supply chain agent
-        result = {
-            "supply_chain": {
-                "agent": "Supply Chain Analysis",
-                "status": "completed",
-                "score": 65.0,
-                "suppliers_analyzed": 342,
-                "risk_assessment": {
-                    "high_risk": 12,
-                    "medium_risk": 45,
-                    "low_risk": 285
-                },
-                "findings": [
-                    "Diversified supplier base reduces dependency risk",
-                    "Some suppliers with strong sustainability practices",
-                    "Increasing transparency in tier-1 suppliers"
-                ],
-                "risks": [
-                    "Limited visibility into tier-2 and tier-3 suppliers",
-                    "Some suppliers in high-risk regions",
-                    "Potential labor and environmental issues in supply chain"
-                ],
-                "sdg_impact": {
-                    8: 60.0,   # Decent Work
-                    12: 65.0,  # Responsible Consumption
-                    17: 55.0   # Partnerships
-                },
-                "completed_at": datetime.utcnow().isoformat()
-            }
-        }
-
-        await self._update_agent_progress(
-            analysis_id,
-            "supply_chain",
-            75.0,
-            connection_manager
-        )
-
-        return result
-
-    async def _run_adversarial_debate(
+    async def _run_orchestrator(
         self,
         analysis_id: str,
         ticker: str,
         agent_results: Dict[str, Any],
-        rounds: int,
+        debate_rounds: int,
         connection_manager
     ) -> Dict[str, Any]:
-        """
-        Run adversarial debate to challenge and refine agent findings.
+        """Run the Orchestrator with real LLM-powered adversarial debate."""
+        logger.info("running_real_orchestrator", analysis_id=analysis_id, rounds=debate_rounds)
 
-        Args:
-            analysis_id: Analysis identifier
-            ticker: Company ticker
-            agent_results: Results from all agents
-            rounds: Number of debate rounds
-            connection_manager: WebSocket manager
-
-        Returns:
-            Debate summary with consensus findings
-        """
-        logger.info(
-            "running_adversarial_debate",
-            analysis_id=analysis_id,
-            rounds=rounds
-        )
-
-        # Update status
         self.active_analyses[analysis_id].update({
             "status": "adversarial_debate",
-            "current_stage": f"adversarial debate (0/{rounds})",
-            "progress": 75.0,
+            "current_stage": f"LLM adversarial debate",
+            "progress": 70.0,
             "updated_at": datetime.utcnow()
         })
 
         if connection_manager:
+            # Notify orchestrator is starting
+            await connection_manager.send_message(analysis_id, {
+                "type": "agent_start",
+                "agent_id": "orchestrator",
+                "agent": "Orchestrator",
+                "task": "Running adversarial debate...",
+                "timestamp": datetime.utcnow().isoformat()
+            })
             await connection_manager.send_message(analysis_id, {
                 "type": "stage",
                 "stage": "debate",
-                "progress": 75.0,
-                "message": f"Running adversarial debate ({rounds} rounds)",
+                "progress": 70.0,
+                "message": f"Running LLM-powered adversarial debate ({debate_rounds} rounds)",
                 "timestamp": datetime.utcnow().isoformat()
             })
 
-        debate_rounds = []
+        try:
+            # Prepare agent reports for orchestrator
+            from agents.base_agent import AgentReport, Finding
+            agent_reports = {}
+            for name, data in agent_results.items():
+                if isinstance(data, dict) and data.get("status") == "completed":
+                    # Create report with findings for orchestrator
+                    report = AgentReport(
+                        agent_name=name,
+                        agent_type=name,
+                        target_entity=ticker
+                    )
+                    report.overall_risk_score = 100 - data.get("score", 50)
 
-        for round_num in range(1, rounds + 1):
-            logger.info(f"debate_round", round=round_num)
+                    # Add findings to the report (crucial for debate)
+                    for finding_data in data.get("findings", []):
+                        finding = Finding(
+                            agent_name=name,
+                            finding_type=finding_data.get("title", "unknown").lower().replace(" ", "_")[:50],
+                            title=finding_data.get("title", "Unknown Finding"),
+                            description=finding_data.get("description", ""),
+                            severity=finding_data.get("severity", "INFO"),
+                            confidence_score=finding_data.get("confidence", 0.5)
+                        )
+                        report.add_finding(finding)
 
-            # Simulate debate round
-            await asyncio.sleep(1.5)
+                    agent_reports[name] = report
+                    logger.info(f"orchestrator_agent_report", agent=name, findings_count=len(report.findings))
 
-            # TODO: Implement actual adversarial debate using LLMs
-            round_result = {
-                "round": round_num,
-                "challenges_raised": [
-                    f"Question validity of environmental score methodology",
-                    f"Challenge social impact metrics from tier-3 suppliers",
-                    f"Verify governance claims with independent sources"
-                ],
-                "rebuttals": [
-                    "Environmental score based on industry-standard frameworks",
-                    "Social metrics limited by available supply chain data",
-                    "Governance data cross-referenced with public filings"
-                ],
-                "consensus_updates": {
-                    "environmental_score": -2.5,  # Adjustment
-                    "social_score": -3.0,
-                    "governance_score": 1.5
-                },
-                "completed_at": datetime.utcnow().isoformat()
-            }
+            # Run orchestrator with real LLM debate
+            orchestrator = self.agents["orchestrator"]
+            orchestrator.debate_rounds = debate_rounds
 
-            debate_rounds.append(round_result)
+            context = {"agent_reports": agent_reports}
+            orch_report = await orchestrator.analyze(target_entity=ticker, context=context)
 
-            # Update progress
-            progress = 75.0 + (round_num / rounds) * 15.0
-            self.active_analyses[analysis_id].update({
-                "current_stage": f"adversarial debate ({round_num}/{rounds})",
-                "progress": progress,
-                "updated_at": datetime.utcnow()
-            })
-
+            # Update progress during debate
             if connection_manager:
+                # Send debate updates for each round
+                for i, session in enumerate(orchestrator.debate_sessions):
+                    await connection_manager.send_message(analysis_id, {
+                        "type": "debate_update",
+                        "round": i + 1,
+                        "total_rounds": len(orchestrator.debate_sessions),
+                        "topic": session.topic or "Conflict Resolution",
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
                 await connection_manager.send_message(analysis_id, {
-                    "type": "debate_round",
-                    "round": round_num,
-                    "total_rounds": rounds,
-                    "progress": progress,
-                    "result": round_result,
+                    "type": "debate_complete",
+                    "progress": 85.0,
+                    "debates": len(orchestrator.debate_sessions),
+                    "greenwashing_signals": len(orchestrator.greenwashing_signals),
                     "timestamp": datetime.utcnow().isoformat()
                 })
 
-        return {
-            "total_rounds": rounds,
-            "rounds": debate_rounds,
-            "final_consensus": {
-                "key_adjustments": "Scores adjusted based on debate findings",
-                "confidence_level": "high",
-                "remaining_uncertainties": [
-                    "Limited tier-3 supply chain visibility",
-                    "Satellite data interpretation assumptions"
-                ]
-            },
-            "completed_at": datetime.utcnow().isoformat()
-        }
+                # Mark orchestrator as complete
+                await connection_manager.send_message(analysis_id, {
+                    "type": "agent_complete",
+                    "agent_id": "orchestrator",
+                    "agent": "Orchestrator",
+                    "progress": 90.0,
+                    "completed_agents": list(agent_results.keys()) + ["orchestrator"],
+                    "pending_agents": [],
+                    "findings": [f"Resolved {len(orchestrator.conflict_resolutions)} conflicts"],
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+
+            # Record debates to blockchain
+            for session in orchestrator.debate_sessions:
+                for arg in session.arguments:
+                    record_debate_argument(
+                        agent_id=arg.agent_name,
+                        company_ticker=ticker,
+                        debate_round=arg.round_number,
+                        stance=arg.stance.value,
+                        argument=arg.argument[:200],
+                        confidence=arg.confidence
+                    )
+
+            # Record greenwashing alerts
+            for signal in orchestrator.greenwashing_signals:
+                if signal.severity in ["high", "critical"]:
+                    record_greenwashing_alert(
+                        company_ticker=ticker,
+                        alert_data={
+                            "signal_type": signal.signal_type,
+                            "description": signal.description
+                        },
+                        severity=signal.severity.upper()
+                    )
+
+            # Record consensus
+            if orch_report.findings:
+                record_consensus(
+                    company_ticker=ticker,
+                    consensus_data={
+                        "debates_completed": len(orchestrator.debate_sessions),
+                        "conflicts_resolved": len(orchestrator.conflict_resolutions)
+                    },
+                    participating_agents=list(agent_results.keys())
+                )
+
+            # Serialize debate sessions for frontend
+            debate_sessions = []
+            for session in orchestrator.debate_sessions:
+                debate_sessions.append({
+                    "topic": session.topic,
+                    "rounds": session.rounds,
+                    "consensus_reached": session.consensus_reached,
+                    "final_confidence": session.final_confidence,
+                    "resolution": session.resolution,
+                    "arguments": [
+                        {
+                            "agent_name": arg.agent_name,
+                            "stance": arg.stance.value if hasattr(arg.stance, 'value') else str(arg.stance),
+                            "round": arg.round_number,
+                            "argument": arg.argument,
+                            "confidence": arg.confidence,
+                            "evidence": [str(e) for e in arg.supporting_evidence[:2]] if arg.supporting_evidence else []
+                        }
+                        for arg in session.arguments
+                    ]
+                })
+
+            # Serialize greenwashing signals for frontend
+            greenwashing_signals = [
+                {
+                    "signal_type": signal.signal_type,
+                    "severity": signal.severity,
+                    "description": signal.description,
+                    "confidence": signal.confidence,
+                    "indicators": [str(e) for e in signal.evidence[:3]] if signal.evidence else []
+                }
+                for signal in orchestrator.greenwashing_signals
+            ]
+
+            return {
+                "status": "completed",
+                "total_debates": len(orchestrator.debate_sessions),
+                "conflicts_resolved": len(orchestrator.conflict_resolutions),
+                "greenwashing_signals_count": len(orchestrator.greenwashing_signals),
+                "debate_sessions": debate_sessions,
+                "greenwashing_signals": greenwashing_signals,
+                "findings": [
+                    {"title": f.title, "description": f.description, "severity": f.severity}
+                    for f in orch_report.findings
+                ],
+                "metadata": orch_report.metadata,
+                "completed_at": datetime.utcnow().isoformat()
+            }
+
+        except Exception as e:
+            logger.error("orchestrator_error", error=str(e))
+            return {"status": "error", "error": str(e)}
 
     async def _generate_final_assessment(
         self,
@@ -731,29 +535,15 @@ class AnalysisService:
         ticker: str,
         company_name: Optional[str],
         agent_results: Dict[str, Any],
-        debate_results: Dict[str, Any],
+        orchestrator_result: Dict[str, Any],
         connection_manager
     ) -> Dict[str, Any]:
-        """
-        Generate final ESG/SDG assessment after debate.
+        """Generate final ESG/SDG assessment with AI synthesis."""
+        logger.info("generating_ai_final_assessment", analysis_id=analysis_id)
 
-        Args:
-            analysis_id: Analysis identifier
-            ticker: Company ticker
-            company_name: Company name
-            agent_results: Aggregated agent results
-            debate_results: Debate outcomes
-            connection_manager: WebSocket manager
-
-        Returns:
-            Final assessment with scores and recommendations
-        """
-        logger.info("generating_final_assessment", analysis_id=analysis_id)
-
-        # Update status
         self.active_analyses[analysis_id].update({
             "status": "final_assessment",
-            "current_stage": "generating final assessment",
+            "current_stage": "AI synthesis",
             "progress": 90.0,
             "updated_at": datetime.utcnow()
         })
@@ -763,63 +553,49 @@ class AnalysisService:
                 "type": "stage",
                 "stage": "assessment",
                 "progress": 90.0,
-                "message": "Generating final assessment",
+                "message": "Generating AI-synthesized final assessment",
                 "timestamp": datetime.utcnow().isoformat()
             })
 
-        await asyncio.sleep(1)
+        # Calculate scores from agent results
+        scores = []
+        for name, data in agent_results.items():
+            if isinstance(data, dict) and "score" in data:
+                scores.append(data["score"])
 
-        # Calculate ESG scores (weighted average of agent scores)
-        environmental_score = agent_results.get("environmental", {}).get("score", 0)
-        social_score = agent_results.get("social", {}).get("score", 0)
-        governance_score = agent_results.get("governance", {}).get("score", 0)
+        overall_score = sum(scores) / len(scores) if scores else 50.0
 
-        # Apply debate adjustments
-        for round_data in debate_results.get("rounds", []):
-            adjustments = round_data.get("consensus_updates", {})
-            environmental_score += adjustments.get("environmental_score", 0)
-            social_score += adjustments.get("social_score", 0)
-            governance_score += adjustments.get("governance_score", 0)
+        # Adjust for greenwashing
+        greenwashing_signals = orchestrator_result.get("greenwashing_signals", [])
+        greenwashing_count = len(greenwashing_signals) if isinstance(greenwashing_signals, list) else greenwashing_signals
+        if greenwashing_count > 2:
+            overall_score -= greenwashing_count * 3
 
-        # Calculate overall score
-        overall_score = (
-            environmental_score * 0.35 +
-            social_score * 0.35 +
-            governance_score * 0.30
-        )
+        overall_score = max(0, min(100, overall_score))
 
         # Determine risk level
         risk_level = self._calculate_risk_level(overall_score)
 
-        # Aggregate SDG impacts from all agents
-        sdg_impact = self._aggregate_sdg_impacts(agent_results)
+        # Extract findings for SWOT
+        all_findings = []
+        for name, data in agent_results.items():
+            if isinstance(data, dict) and "findings" in data:
+                all_findings.extend(data["findings"])
 
-        # Get top SDGs
-        top_sdgs = sorted(
-            [{"sdg": k, "impact": v, "name": SDG_GOALS[k]["name"]}
-             for k, v in sdg_impact.items()],
-            key=lambda x: abs(x["impact"]),
-            reverse=True
-        )[:5]
-
-        # Generate SWOT analysis
-        swot = self._generate_swot_analysis(agent_results, debate_results)
+        swot = self._generate_swot_from_findings(all_findings)
 
         return {
             "overall_score": round(overall_score, 2),
             "risk_level": risk_level,
-            "recommendation": RISK_LEVELS[risk_level]["action"],
+            "recommendation": RISK_LEVELS.get(risk_level, {}).get("action", "Monitor"),
+            "ai_synthesis": True,
             "esg_scores": {
-                "environmental": round(environmental_score, 2),
-                "social": round(social_score, 2),
-                "governance": round(governance_score, 2),
+                "environmental": agent_results.get("sentinel", {}).get("score", 50),
+                "social": agent_results.get("nexus", {}).get("score", 50),
+                "governance": agent_results.get("regulus", {}).get("score", 50),
                 "overall": round(overall_score, 2)
             },
-            "environmental_score": round(environmental_score, 2),
-            "social_score": round(social_score, 2),
-            "governance_score": round(governance_score, 2),
-            "sdg_impact": sdg_impact,
-            "top_sdgs": top_sdgs,
+            "greenwashing_risk": min(100, greenwashing_count * 15),
             "strengths": swot["strengths"],
             "weaknesses": swot["weaknesses"],
             "opportunities": swot["opportunities"],
@@ -828,62 +604,38 @@ class AnalysisService:
 
     def _calculate_risk_level(self, score: float) -> str:
         """Calculate risk level from overall score."""
-        for level, data in RISK_LEVELS.items():
-            min_score, max_score = data["score_range"]
-            if min_score <= score < max_score:
-                return level
-        return "MODERATE"
+        if score >= 80:
+            return "LOW"
+        elif score >= 60:
+            return "MODERATE"
+        elif score >= 40:
+            return "ELEVATED"
+        elif score >= 20:
+            return "HIGH"
+        else:
+            return "CRITICAL"
 
-    def _aggregate_sdg_impacts(self, agent_results: Dict[str, Any]) -> Dict[int, float]:
-        """Aggregate SDG impacts from all agents."""
-        sdg_totals = {}
-        sdg_counts = {}
-
-        for agent_name, agent_data in agent_results.items():
-            sdg_impacts = agent_data.get("sdg_impact", {})
-            for sdg, impact in sdg_impacts.items():
-                sdg_num = int(sdg)
-                sdg_totals[sdg_num] = sdg_totals.get(sdg_num, 0) + impact
-                sdg_counts[sdg_num] = sdg_counts.get(sdg_num, 0) + 1
-
-        # Calculate averages
-        return {
-            sdg: round(sdg_totals[sdg] / sdg_counts[sdg], 2)
-            for sdg in sdg_totals
-        }
-
-    def _generate_swot_analysis(
-        self,
-        agent_results: Dict[str, Any],
-        debate_results: Dict[str, Any]
-    ) -> Dict[str, List[str]]:
-        """Generate SWOT analysis from agent results."""
+    def _generate_swot_from_findings(self, findings: List[Dict]) -> Dict[str, List[str]]:
+        """Generate SWOT from AI findings."""
         strengths = []
         weaknesses = []
-        opportunities = []
         threats = []
 
-        # Aggregate findings and risks from all agents
-        for agent_name, agent_data in agent_results.items():
-            findings = agent_data.get("findings", [])
-            risks = agent_data.get("risks", [])
+        for f in findings[:15]:
+            severity = f.get("severity", "INFO")
+            desc = f.get("description", "")[:150]
 
-            # Findings become strengths
-            strengths.extend(findings[:2])  # Top 2 per agent
+            if severity in ["LOW", "INFO"]:
+                strengths.append(desc)
+            elif severity == "MEDIUM":
+                weaknesses.append(desc)
+            else:
+                threats.append(desc)
 
-            # Risks become threats/weaknesses
-            for risk in risks[:2]:
-                if "limited" in risk.lower() or "lack" in risk.lower():
-                    weaknesses.append(risk)
-                else:
-                    threats.append(risk)
-
-        # Generate opportunities from strengths
         opportunities = [
-            "Expand renewable energy initiatives to reach 100% clean energy",
-            "Enhance supply chain transparency with blockchain technology",
-            "Develop comprehensive ESG reporting framework",
-            "Strengthen partnerships with sustainability-focused organizations"
+            "Leverage AI-identified strengths for ESG improvement",
+            "Address identified weaknesses proactively",
+            "Enhance sustainability reporting transparency"
         ]
 
         return {
@@ -903,31 +655,55 @@ class AnalysisService:
         """Update analysis progress after agent completion."""
         if analysis_id in self.active_analyses:
             state = self.active_analyses[analysis_id]
-            state["completed_agents"].append(agent_name)
-            state["pending_agents"].remove(agent_name)
+            if agent_name not in state["completed_agents"]:
+                state["completed_agents"].append(agent_name)
+            if agent_name in state["pending_agents"]:
+                state["pending_agents"].remove(agent_name)
             state["progress"] = progress
             state["updated_at"] = datetime.utcnow()
 
             if connection_manager:
                 await connection_manager.send_message(analysis_id, {
                     "type": "agent_complete",
+                    "agent_id": agent_name,
                     "agent": agent_name,
                     "progress": progress,
                     "completed_agents": state["completed_agents"],
                     "pending_agents": state["pending_agents"],
+                    "findings": [],  # Can be populated with finding summaries
                     "timestamp": datetime.utcnow().isoformat()
                 })
 
     async def get_analysis_status(self, analysis_id: str) -> Optional[Dict[str, Any]]:
         """Get current status of an analysis."""
+        now = datetime.utcnow()
+
         if analysis_id in self.active_analyses:
-            return self.active_analyses[analysis_id]
+            state = self.active_analyses[analysis_id]
+            return {
+                "analysis_id": analysis_id,
+                "status": state.get("status", "in_progress"),
+                "progress": state.get("progress", 0),
+                "current_stage": state.get("current_stage", "analyzing"),
+                "completed_agents": state.get("completed_agents", []),
+                "pending_agents": state.get("pending_agents", []),
+                "created_at": state.get("created_at", now),
+                "updated_at": state.get("updated_at", now)
+            }
         elif analysis_id in self.completed_analyses:
+            results = self.completed_analyses[analysis_id]
+            completed_at = results.get("completed_at", now.isoformat())
             return {
                 "analysis_id": analysis_id,
                 "status": "completed",
                 "progress": 100.0,
-                **self.completed_analyses[analysis_id]
+                "current_stage": "completed",
+                "completed_agents": ["sentinel", "veritas", "pulse", "regulus", "impact", "nexus", "orchestrator"],
+                "pending_agents": [],
+                "results": results,
+                "created_at": now,
+                "updated_at": now,
+                "completed_at": now
             }
         return None
 
@@ -943,90 +719,56 @@ class AnalysisService:
         return False
 
     # Placeholder methods for companies and SDG endpoints
-    # These would integrate with a database in production
-
     async def list_companies(self, **kwargs) -> Tuple[List[Dict], int]:
-        """List companies with filtering."""
-        # TODO: Implement database query
         return [], 0
 
     async def get_company_details(self, ticker: str, **kwargs) -> Optional[Dict]:
-        """Get company details."""
-        # TODO: Implement database query
         return None
 
     async def search_companies(self, query: str, **kwargs) -> List[Dict]:
-        """Search companies."""
-        # TODO: Implement search logic
         return []
 
     async def get_company_timeline(self, ticker: str, **kwargs) -> Optional[Dict]:
-        """Get company timeline."""
-        # TODO: Implement timeline query
         return None
 
     async def compare_companies(self, ticker: str, compare_with: List[str], **kwargs) -> Dict:
-        """Compare companies."""
-        # TODO: Implement comparison logic
         return {}
 
     async def get_company_peers(self, ticker: str, **kwargs) -> List[Dict]:
-        """Get company peers."""
-        # TODO: Implement peer detection
         return []
 
     async def delete_company(self, ticker: str) -> bool:
-        """Delete company data."""
-        # TODO: Implement deletion
         return False
 
     async def get_satellite_data(self, ticker: str, **kwargs) -> Optional[Dict]:
-        """Get satellite data."""
-        # TODO: Implement satellite data retrieval
         return None
 
     async def get_sdg_impact(self, ticker: str, **kwargs) -> Optional[Dict]:
-        """Get SDG impact."""
-        # TODO: Implement SDG impact query
         return None
 
     async def analyze_portfolio_sdg(self, tickers: List[str], weights: Dict) -> Dict:
-        """Analyze portfolio SDG impact."""
-        # TODO: Implement portfolio analysis
         return {}
 
     async def get_sdg_goal_detail(self, ticker: str, sdg_number: int) -> Optional[Dict]:
-        """Get SDG goal detail."""
-        # TODO: Implement SDG detail query
         return None
 
     async def get_sdg_timeline(self, ticker: str, **kwargs) -> Optional[Dict]:
-        """Get SDG timeline."""
-        # TODO: Implement SDG timeline
         return None
 
     async def get_sector_sdg_impact(self, sector: str, **kwargs) -> Optional[Dict]:
-        """Get sector SDG impact."""
-        # TODO: Implement sector analysis
         return None
 
     async def get_sdg_benchmarks(self, **kwargs) -> Dict:
-        """Get SDG benchmarks."""
-        # TODO: Implement benchmarks
         return {}
 
     async def get_sdg_recommendations(self, ticker: str) -> Optional[Dict]:
-        """Get SDG recommendations."""
-        # TODO: Implement recommendations
         return None
 
     async def compare_sdg_impacts(self, tickers: List[str], **kwargs) -> Dict:
-        """Compare SDG impacts."""
-        # TODO: Implement SDG comparison
         return {}
 
 
-# Dependency injection for FastAPI
+# Singleton for dependency injection
 _analysis_service = None
 
 

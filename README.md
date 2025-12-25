@@ -2,18 +2,27 @@
 
 A revolutionary multi-agent AI system for sustainable finance intelligence, featuring adversarial debate for greenwashing detection and SDG impact quantification.
 
+> **Hackathon Project** - Built for sustainable finance innovation
+
 ## Overview
 
 GAIA (Global AI-powered Impact Assessment) is a comprehensive ESG (Environmental, Social, Governance) and SDG (Sustainable Development Goals) analysis platform that uses multiple specialized AI agents working in concert with adversarial debate methodology to provide accurate, verified sustainability assessments for investors and financial institutions.
 
+### What Makes GAIA Unique
+
+1. **Adversarial Debate System** - Agents actively challenge each other's findings to detect greenwashing
+2. **Multi-LLM Architecture** - Uses Gemini, GPT-4, and Claude with automatic fallback
+3. **Real Data Integration** - NewsAPI, Alpha Vantage, SEC EDGAR for live data
+4. **Blockchain Audit Trail** - Immutable verification of all findings
+
 ### Key Features
 
-- **6 Specialized AI Agents**: Sentinel, Veritas, Pulse, Regulus, Impact, and Orchestrator
+- **7 Specialized AI Agents**: Sentinel, Veritas, Pulse, Regulus, Impact, NEXUS, and Orchestrator
 - **Adversarial Debate System**: Agents challenge each other's findings for robust analysis
 - **SDG Impact Quantification**: Measurable impact per dollar invested across all 17 SDGs
 - **Real-time Analysis**: WebSocket-powered live updates during analysis
 - **Blockchain Audit Trail**: Immutable verification of all findings
-- **Satellite Imagery Analysis**: Environmental impact detection via satellite data
+- **Greenwashing Detection**: AI-powered detection of sustainability claim inconsistencies
 - **Supply Chain Transparency**: Deep visibility into supplier sustainability
 
 ## Architecture
@@ -104,26 +113,23 @@ GAIA (Global AI-powered Impact Assessment) is a comprehensive ESG (Environmental
 - Python 3.10+
 - Node.js 18+
 - Docker and Docker Compose (optional)
-- Redis (optional)
+- Redis (optional, for caching)
 
-### Option 1: Docker (Recommended)
+### Required API Keys
 
-```bash
-# Clone the repository
-cd gaia-project
+You'll need the following API keys (get them for free):
 
-# Start all services
-docker-compose up -d
+| Service | Get Key At | Purpose |
+|---------|------------|---------|
+| Google Gemini | [ai.google.dev](https://ai.google.dev/) | Primary LLM |
+| OpenAI | [platform.openai.com](https://platform.openai.com/) | Fallback LLM |
+| Anthropic | [console.anthropic.com](https://console.anthropic.com/) | Fallback LLM |
+| NewsAPI | [newsapi.org](https://newsapi.org/register) | News sentiment |
+| Alpha Vantage | [alphavantage.co](https://www.alphavantage.co/support/#api-key) | Financial data |
 
-# Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
-```
+### Option 1: Quick Local Setup (Recommended for Demo)
 
-### Option 2: Manual Setup
-
-**Backend:**
+**Terminal 1 - Backend:**
 ```bash
 cd backend
 
@@ -136,13 +142,15 @@ pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys (at minimum: GOOGLE_GEMINI_API_KEY)
 
 # Run server
 python main.py
+
+# Verify: http://localhost:8000/health
 ```
 
-**Frontend:**
+**Terminal 2 - Frontend:**
 ```bash
 cd frontend
 
@@ -151,7 +159,56 @@ npm install
 
 # Run development server
 npm run dev
+
+# Access: http://localhost:5173
 ```
+
+### Option 2: Docker
+
+```bash
+# Clone the repository
+cd gaia-project
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Start all services
+docker-compose up -d
+
+# Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
+```
+
+### Verify Installation
+
+```bash
+# Check backend health
+curl http://localhost:8000/health
+
+# Check blockchain status
+curl http://localhost:8000/api/v1/blockchain/status
+
+# Run test script
+cd backend
+python test_companies.py --health
+```
+
+### Run Demo
+
+1. Open http://localhost:5173
+2. Enter a company ticker (e.g., "AAPL", "TSLA", "XOM")
+3. Click "Analyze" and watch the 7 AI agents work
+4. See the adversarial debate in action
+5. Review ESG scores, SDG impact, and greenwashing signals
+
+**Recommended Demo Companies:**
+- `AAPL` - Apple (High ESG)
+- `XOM` - Exxon Mobil (Greenwashing detection demo)
+- `TSLA` - Tesla (Environmental focus)
+- `NKE` - Nike (Supply chain focus)
 
 ## API Endpoints
 

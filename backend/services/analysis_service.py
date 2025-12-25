@@ -30,6 +30,8 @@ from agents.impact_agent import ImpactAgent
 from agents.nexus_agent import NexusAgent
 from agents.orchestrator_agent import OrchestratorAgent
 from utils.llm_client import get_multi_llm_client
+from database.session import get_db_context
+from database.repository import AnalysisRepository
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -92,6 +94,11 @@ class AnalysisService:
 
         try:
             logger.info("starting_real_ai_analysis", analysis_id=analysis_id, ticker=ticker)
+
+            # Reset LLM call counter for this analysis (limit to 10 calls)
+            from utils.llm_client import get_multi_llm_client
+            llm_client = get_multi_llm_client()
+            llm_client.reset_call_count()
 
             # Initialize analysis state
             self.active_analyses[analysis_id] = {
@@ -172,6 +179,9 @@ class AnalysisService:
             # Move to completed analyses
             self.completed_analyses[analysis_id] = final_results
             del self.active_analyses[analysis_id]
+
+            # Save to database for history
+            await self._save_to_database(final_results)
 
             # Send final WebSocket update
             if connection_manager:
@@ -483,8 +493,12 @@ class AnalysisService:
                     "topic": session.topic,
                     "rounds": session.rounds,
                     "consensus_reached": session.consensus_reached,
-                    "final_confidence": session.final_confidence,
-                    "resolution": session.resolution,
+                    # Resolution as an object for frontend compatibility
+                    "resolution": {
+                        "winner": session.winning_position or "Balanced",
+                        "reasoning": session.resolution or "Analysis complete",
+                        "final_confidence": session.final_confidence if session.final_confidence else 0.5,
+                    },
                     "arguments": [
                         {
                             "agent_name": arg.agent_name,
@@ -644,6 +658,42 @@ class AnalysisService:
             "opportunities": opportunities[:5],
             "threats": threats[:5]
         }
+
+    async def _save_to_database(self, results: Dict[str, Any]) -> None:
+        """Save completed analysis results to the database."""
+        try:
+            with get_db_context() as db:
+                repo = AnalysisRepository(db)
+
+                # Prepare data for saving
+                save_data = {
+                    "analysis_id": results.get("analysis_id"),
+                    "ticker": results.get("ticker"),
+                    "company_name": results.get("company_name"),
+                    "sector": results.get("sector"),
+                    "industry": results.get("industry"),
+                    "esg_scores": results.get("esg_scores", {}),
+                    "overall_score": results.get("overall_score"),
+                    "risk_level": results.get("risk_level"),
+                    "recommendation": results.get("recommendation"),
+                    "sdg_impact": results.get("sdg_impact"),
+                    "top_sdgs": results.get("top_sdgs"),
+                    "greenwashing_risk_score": results.get("greenwashing_risk"),
+                    "debate_summary": results.get("orchestrator_summary"),
+                    "agent_reports": results.get("agent_results"),
+                    "blockchain": results.get("blockchain"),
+                    "processing_time_seconds": results.get("processing_time"),
+                }
+
+                repo.save_analysis(save_data)
+                logger.info(
+                    "analysis_saved_to_database",
+                    analysis_id=results.get("analysis_id"),
+                    ticker=results.get("ticker")
+                )
+        except Exception as e:
+            # Log but don't fail the analysis if DB save fails
+            logger.error("database_save_failed", error=str(e))
 
     async def _update_agent_progress(
         self,

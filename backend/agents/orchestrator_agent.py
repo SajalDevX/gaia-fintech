@@ -300,10 +300,19 @@ class OrchestratorAgent(BaseAgent):
         conflicts: List[Tuple[Finding, Finding]],
     ) -> None:
         """Run LLM-powered adversarial debates on conflicting findings."""
-        for finding1, finding2 in conflicts[:5]:  # Limit to 5 debates
+        from config import get_settings
+        settings = get_settings()
+        max_debates = getattr(settings, 'MAX_DEBATES', 2)  # Default to 2 debates max
+
+        for idx, (finding1, finding2) in enumerate(conflicts[:max_debates]):  # Limit debates
+            # Create a more descriptive topic from both findings
+            topic = f"{finding1.title} vs {finding2.title}"
+            if len(topic) > 80:
+                topic = f"{finding1.finding_type}: {finding1.agent_name} vs {finding2.agent_name}"
+
             session = DebateSession(
                 finding_id=f"{finding1.id}_vs_{finding2.id}",
-                topic=finding1.finding_type,
+                topic=topic,
                 rounds=self.debate_rounds,
             )
 
@@ -351,6 +360,7 @@ class OrchestratorAgent(BaseAgent):
         previous_arguments: List[DebateArgument],
     ) -> DebateArgument:
         """Generate a debate argument using LLM."""
+        import random
         try:
             prev_args_text = ""
             if previous_arguments:
@@ -359,36 +369,50 @@ class OrchestratorAgent(BaseAgent):
                     for arg in previous_arguments[-4:]
                 ])
 
-            prompt = f"""You are an ESG analyst participating in an adversarial debate about {target_entity}.
+            # Add unique identifiers to prevent caching
+            unique_id = random.randint(1000, 9999)
+
+            if stance == "supporting":
+                role_desc = f"You are the {finding.agent_name} agent DEFENDING your findings"
+                action = "DEFEND your position and explain why your analysis is accurate"
+            else:
+                role_desc = f"You are the {opposing_finding.agent_name} agent CHALLENGING the opposing view"
+                action = "CHALLENGE the opposing position and point out flaws or missing considerations"
+
+            prompt = f"""[Debate ID: {unique_id}] {role_desc} in an ESG debate about {target_entity}.
 
 ROUND {round_num} of {self.debate_rounds}
 
-YOUR POSITION ({stance}):
-Finding: {finding.title}
-Description: {finding.description}
-Severity: {finding.severity}
-Agent: {finding.agent_name}
+YOUR FINDING TO {stance.upper()}:
+Title: {finding.title}
+Details: {finding.description}
+Severity Assessment: {finding.severity}
+Your Agent Role: {finding.agent_name}
 
-OPPOSING POSITION:
-Finding: {opposing_finding.title}
-Description: {opposing_finding.description}
+THE OPPOSING VIEW YOU MUST ADDRESS:
+Title: {opposing_finding.title}
+Details: {opposing_finding.description}
 Severity: {opposing_finding.severity}
-Agent: {opposing_finding.agent_name}
+Opposing Agent: {opposing_finding.agent_name}
 
-{f"Previous arguments in this debate:{chr(10)}{prev_args_text}" if prev_args_text else ""}
+{f"PREVIOUS DEBATE EXCHANGES:{chr(10)}{prev_args_text}" if prev_args_text else "This is the opening argument."}
 
-Generate a concise, evidence-based argument (2-3 sentences) {stance} your position.
-If this is round 2+, address counterarguments from the previous round.
-Focus on facts and logical reasoning."""
+YOUR TASK: {action}
+Write a unique, specific argument (2-3 sentences) that directly addresses the conflict between these two findings.
+{"Build on or counter the previous arguments." if round_num > 1 else "Make your opening case."}
+Be specific about {target_entity} and reference concrete ESG factors."""
 
             result = await self.llm_client.generate_text(
                 prompt=prompt,
                 system_prompt=self.system_prompt,
-                temperature=0.5,
+                temperature=0.7,  # Higher temperature for more varied debate arguments
             )
 
+            # Use correct agent name based on stance
+            agent_name = finding.agent_name if stance == "supporting" else opposing_finding.agent_name
+
             return DebateArgument(
-                agent_name=finding.agent_name,
+                agent_name=agent_name,
                 stance=DebateStance.SUPPORTING if stance == "supporting" else DebateStance.CHALLENGING,
                 round_number=round_num,
                 argument=result.strip(),
@@ -398,11 +422,12 @@ Focus on facts and logical reasoning."""
 
         except Exception as e:
             self.logger.error("debate_argument_error", error=str(e))
+            fallback_agent = finding.agent_name if stance == "supporting" else opposing_finding.agent_name
             return DebateArgument(
-                agent_name=finding.agent_name,
+                agent_name=fallback_agent,
                 stance=DebateStance.SUPPORTING if stance == "supporting" else DebateStance.CHALLENGING,
                 round_number=round_num,
-                argument=f"[Debate point based on {finding.title}]",
+                argument=f"[{fallback_agent}'s argument on {finding.title}]",
                 confidence=finding.confidence_score * 0.5,
             )
 
@@ -596,23 +621,39 @@ If no greenwashing is detected, state that clearly."""
                 temperature=0.3,
             )
 
-            # Parse LLM response for signals
+            # Parse LLM response for signals with better descriptions
             result_lower = result.lower()
             patterns = [
-                ("vague_claims", "vague"),
-                ("lack_of_evidence", "lack of evidence"),
-                ("contradictory_data", "contradict"),
-                ("cherry_picking", "cherry"),
-                ("hidden_tradeoffs", "tradeoff"),
+                ("vague_claims", "vague", "Unsubstantiated environmental claims lacking specific metrics or verification"),
+                ("lack_of_evidence", "lack of evidence", "Positive sustainability claims without supporting data or third-party validation"),
+                ("contradictory_data", "contradict", "Conflicting statements between environmental claims and actual operational data"),
+                ("cherry_picking", "cherry", "Selective reporting of favorable ESG metrics while omitting negative indicators"),
+                ("hidden_tradeoffs", "tradeoff", "Environmental benefits claimed while ignoring negative impacts in other areas"),
             ]
 
-            for pattern_type, keyword in patterns:
+            for pattern_type, keyword, default_desc in patterns:
                 if keyword in result_lower:
-                    severity = "high" if "critical" in result_lower or "significant" in result_lower else "medium"
+                    # Determine severity from context
+                    if "critical" in result_lower or "severe" in result_lower:
+                        severity = "critical"
+                    elif "significant" in result_lower or "major" in result_lower:
+                        severity = "high"
+                    elif "minor" in result_lower or "low" in result_lower:
+                        severity = "low"
+                    else:
+                        severity = "medium"
+
+                    # Try to extract relevant sentence from LLM response
+                    description = default_desc
+                    for sentence in result.split('.'):
+                        if keyword in sentence.lower() and len(sentence) > 20:
+                            description = sentence.strip()[:200]
+                            break
+
                     self.greenwashing_signals.append(GreenwashingSignal(
                         signal_type=pattern_type,
                         severity=severity,
-                        description=f"LLM detected {pattern_type.replace('_', ' ')} pattern",
+                        description=description,
                         confidence=0.75,
                     ))
 

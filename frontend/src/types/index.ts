@@ -51,10 +51,11 @@ export interface AnalysisResult {
   esgScores: ESGScores;
   sdgImpacts: SDGImpact[];
   greenwashingAlerts: GreenwashingAlert[];
-  agents: AgentStatus[];
-  debate: DebateMessage[];
-  analysisDate: Date;
-  confidence: number;
+  agents?: AgentStatus[];
+  debate?: DebateMessage[];
+  analysisDate?: Date;
+  confidence?: number;
+  blockchainHash?: string;
 }
 
 export interface WebSocketMessage {

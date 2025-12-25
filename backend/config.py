@@ -60,7 +60,9 @@ class Settings(BaseSettings):
     # Agent Configuration
     AGENT_TIMEOUT_SECONDS: int = 60
     MAX_CONCURRENT_AGENTS: int = 10
-    ADVERSARIAL_DEBATE_ROUNDS: int = 3
+    ADVERSARIAL_DEBATE_ROUNDS: int = 1  # Reduced from 3 to minimize API calls
+    MAX_DEBATES: int = 2  # Limit debates to 2 max
+    MAX_LLM_CALLS_PER_ANALYSIS: int = 50  # Limit API calls per analysis
 
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100

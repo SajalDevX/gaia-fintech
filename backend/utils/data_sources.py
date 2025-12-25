@@ -531,6 +531,203 @@ class SECEdgarClient:
             return ""
 
 
+class FallbackDataProvider:
+    """
+    Provides fallback/mock data when external APIs fail.
+    Ensures graceful degradation for demo purposes.
+    """
+
+    # Sample company data for common tickers
+    COMPANY_DATA = {
+        "AAPL": {
+            "name": "Apple Inc.",
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "description": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide.",
+        },
+        "MSFT": {
+            "name": "Microsoft Corporation",
+            "sector": "Technology",
+            "industry": "Software—Infrastructure",
+            "description": "Microsoft Corporation develops, licenses, and supports software, services, devices, and solutions worldwide.",
+        },
+        "TSLA": {
+            "name": "Tesla, Inc.",
+            "sector": "Consumer Cyclical",
+            "industry": "Auto Manufacturers",
+            "description": "Tesla, Inc. designs, develops, manufactures, and sells electric vehicles, energy storage systems, and solar energy generation systems.",
+        },
+        "XOM": {
+            "name": "Exxon Mobil Corporation",
+            "sector": "Energy",
+            "industry": "Oil & Gas Integrated",
+            "description": "Exxon Mobil Corporation explores for and produces crude oil and natural gas worldwide.",
+        },
+        "NKE": {
+            "name": "NIKE, Inc.",
+            "sector": "Consumer Cyclical",
+            "industry": "Footwear & Accessories",
+            "description": "NIKE, Inc. designs, develops, markets, and sells athletic footwear, apparel, equipment, and accessories worldwide.",
+        },
+        "GOOGL": {
+            "name": "Alphabet Inc.",
+            "sector": "Technology",
+            "industry": "Internet Content & Information",
+            "description": "Alphabet Inc. provides various products and platforms in the United States, Europe, and internationally.",
+        },
+        "AMZN": {
+            "name": "Amazon.com, Inc.",
+            "sector": "Consumer Cyclical",
+            "industry": "Internet Retail",
+            "description": "Amazon.com, Inc. engages in the retail sale of consumer products and subscriptions through online and physical stores.",
+        },
+    }
+
+    @classmethod
+    def get_fallback_company(cls, symbol: str) -> CompanyFinancials:
+        """Get fallback company data."""
+        symbol = symbol.upper()
+        data = cls.COMPANY_DATA.get(symbol, {
+            "name": f"{symbol} Corporation",
+            "sector": "Unknown",
+            "industry": "Unknown",
+            "description": f"Company trading under symbol {symbol}.",
+        })
+
+        return CompanyFinancials(
+            symbol=symbol,
+            name=data["name"],
+            description=data["description"],
+            sector=data["sector"],
+            industry=data["industry"],
+            market_cap=None,
+            pe_ratio=None,
+            eps=None,
+            extra_data={"fallback": True, "message": "Using cached/fallback data"},
+        )
+
+    @classmethod
+    def get_fallback_news(cls, query: str) -> List[NewsArticle]:
+        """Get fallback news articles with general ESG context."""
+        now = datetime.utcnow()
+        articles = [
+            NewsArticle(
+                title=f"ESG Analysis: {query} Sustainability Practices Under Review",
+                description=f"Industry analysts examine {query}'s environmental and social governance practices.",
+                content=f"A comprehensive review of {query}'s ESG performance indicates ongoing efforts in sustainability...",
+                source="ESG Monitor (Fallback)",
+                author="Industry Analyst",
+                url="https://example.com/esg-analysis",
+                published_at=now - timedelta(days=1),
+                sentiment=0.0,
+            ),
+            NewsArticle(
+                title=f"{query} Announces New Sustainability Initiatives",
+                description=f"{query} reveals plans for carbon reduction and renewable energy adoption.",
+                content=f"In a recent statement, {query} outlined its commitment to sustainable business practices...",
+                source="Business Wire (Fallback)",
+                author="Press Release",
+                url="https://example.com/sustainability",
+                published_at=now - timedelta(days=3),
+                sentiment=0.5,
+            ),
+            NewsArticle(
+                title=f"Supply Chain Transparency: {query}'s Approach",
+                description=f"How {query} is addressing supply chain ethics and transparency.",
+                content=f"Supply chain management remains a key focus area for {query} as stakeholders demand greater visibility...",
+                source="Supply Chain Digest (Fallback)",
+                author="Industry Report",
+                url="https://example.com/supply-chain",
+                published_at=now - timedelta(days=7),
+                sentiment=0.2,
+            ),
+        ]
+        return articles
+
+    @classmethod
+    def get_fallback_filings(cls, ticker: str) -> List[SECFiling]:
+        """Get fallback SEC filing placeholders."""
+        now = datetime.utcnow()
+        return [
+            SECFiling(
+                accession_number="0000000000-00-000001",
+                filing_type="10-K",
+                filing_date=now - timedelta(days=90),
+                accepted_date=now - timedelta(days=90),
+                company_name=cls.COMPANY_DATA.get(ticker.upper(), {}).get("name", ticker),
+                cik="0000000000",
+                document_url=f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}",
+                description="Annual Report (Fallback - API unavailable)",
+            ),
+            SECFiling(
+                accession_number="0000000000-00-000002",
+                filing_type="10-Q",
+                filing_date=now - timedelta(days=45),
+                accepted_date=now - timedelta(days=45),
+                company_name=cls.COMPANY_DATA.get(ticker.upper(), {}).get("name", ticker),
+                cik="0000000000",
+                document_url=f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}",
+                description="Quarterly Report (Fallback - API unavailable)",
+            ),
+        ]
+
+
+class ResilientDataFetcher:
+    """
+    Wrapper that provides resilient data fetching with automatic fallback.
+    Use this instead of direct API clients for production robustness.
+    """
+
+    def __init__(self):
+        self.news_client = NewsAPIClient()
+        self.financial_client = AlphaVantageClient()
+        self.sec_client = SECEdgarClient()
+        self.fallback = FallbackDataProvider()
+
+    async def get_company_data(self, symbol: str) -> CompanyFinancials:
+        """Get company data with fallback."""
+        try:
+            result = await self.financial_client.get_company_overview(symbol)
+            if result:
+                return result
+        except Exception as e:
+            logger.warning("financial_api_failed", symbol=symbol, error=str(e))
+
+        logger.info("using_fallback_company_data", symbol=symbol)
+        return self.fallback.get_fallback_company(symbol)
+
+    async def get_news(self, query: str, days_back: int = 30) -> List[NewsArticle]:
+        """Get news with fallback."""
+        try:
+            result = await self.news_client.search_news(query, days_back=days_back)
+            if result:
+                return result
+        except Exception as e:
+            logger.warning("news_api_failed", query=query, error=str(e))
+
+        logger.info("using_fallback_news", query=query)
+        return self.fallback.get_fallback_news(query)
+
+    async def get_sec_filings(
+        self,
+        ticker: str,
+        filing_types: List[str] = None,
+        limit: int = 10
+    ) -> List[SECFiling]:
+        """Get SEC filings with fallback."""
+        try:
+            result = await self.sec_client.get_recent_filings(
+                ticker, filing_types=filing_types, limit=limit
+            )
+            if result:
+                return result
+        except Exception as e:
+            logger.warning("sec_api_failed", ticker=ticker, error=str(e))
+
+        logger.info("using_fallback_filings", ticker=ticker)
+        return self.fallback.get_fallback_filings(ticker)
+
+
 # Factory functions for getting client instances
 def get_news_client() -> NewsAPIClient:
     """Get a NewsAPI client instance."""
@@ -549,3 +746,8 @@ get_alpha_vantage_client = get_financial_client
 def get_sec_client() -> SECEdgarClient:
     """Get an SEC EDGAR client instance."""
     return SECEdgarClient()
+
+
+def get_resilient_fetcher() -> ResilientDataFetcher:
+    """Get a resilient data fetcher with automatic fallback."""
+    return ResilientDataFetcher()

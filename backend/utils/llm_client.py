@@ -253,6 +253,11 @@ class MultiProviderLLMClient:
         self._current_index = 0
         self._lock = asyncio.Lock()
 
+        # LLM call limiting
+        self._call_count = 0
+        self._max_calls = getattr(settings, 'MAX_LLM_CALLS_PER_ANALYSIS', 10)
+        self._call_limit_enabled = True
+
         # Initialize available providers
         gemini_key = gemini_key or settings.GOOGLE_GEMINI_API_KEY
         openai_key = openai_key or getattr(settings, 'OPENAI_API_KEY', None)
@@ -288,6 +293,23 @@ class MultiProviderLLMClient:
             LLMProvider.CLAUDE: 0.3,   # Haiku is cheap
             LLMProvider.OPENAI: 0.2,   # GPT-4o is more expensive
         }
+
+    def reset_call_count(self):
+        """Reset the LLM call counter. Call this at the start of each analysis."""
+        self._call_count = 0
+        logger.info("llm_call_count_reset")
+
+    def get_call_count(self) -> int:
+        """Get the current LLM call count."""
+        return self._call_count
+
+    def is_call_limit_reached(self) -> bool:
+        """Check if the call limit has been reached."""
+        return self._call_limit_enabled and self._call_count >= self._max_calls
+
+    def set_call_limit(self, limit: int):
+        """Set the maximum number of LLM calls allowed."""
+        self._max_calls = limit
 
     async def _get_next_provider(self) -> LLMProvider:
         """Get next provider based on strategy."""
@@ -365,6 +387,15 @@ class MultiProviderLLMClient:
         Returns:
             Generated text response
         """
+        # Check call limit
+        if self.is_call_limit_reached():
+            logger.warning(
+                "llm_call_limit_reached",
+                count=self._call_count,
+                limit=self._max_calls
+            )
+            return "[Analysis limit reached - using cached/default response]"
+
         # Check cache
         cache_key = f"multi:{prompt[:100]}"
         if use_cache:
@@ -400,6 +431,9 @@ class MultiProviderLLMClient:
                     max_tokens=max_tokens,
                 )
 
+                # Increment call counter
+                self._call_count += 1
+
                 # Cache result
                 if use_cache:
                     await self.cache.set(cache_key, system_prompt or "", "multi", result)
@@ -408,6 +442,8 @@ class MultiProviderLLMClient:
                     "llm_success",
                     provider=provider.value,
                     response_len=len(result),
+                    call_count=self._call_count,
+                    call_limit=self._max_calls,
                 )
                 return result
 

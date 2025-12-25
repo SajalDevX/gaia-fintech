@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, TrendingUp, AlertTriangle, Globe2, Link2, CheckCircle2 } from 'lucide-react';
+import { Search, TrendingUp, AlertTriangle, Globe2, Link2, CheckCircle2, History } from 'lucide-react';
 import AgentVisualization from './AgentVisualization';
 import SDGImpact from './SDGImpact';
 import GreenwashingAlert from './GreenwashingAlert';
 import ESGScoreCard from './ESGScoreCard';
+import ESGRadarChart from './ESGRadarChart';
 import DebateVisualization from './DebateVisualization';
+import AnalysisHistory from './AnalysisHistory';
 import { AnalysisAPI, GAIA_AGENTS } from '../services/api';
 import type { AnalysisResult, AgentStatus, SDGImpact as SDGImpactType, GreenwashingAlert as GreenwashingAlertType } from '../types';
 
@@ -41,7 +43,49 @@ const AnalysisDashboard = () => {
   const [greenwashingSignals, setGreenwashingSignals] = useState<any[]>([]);
   const [isDebating, setIsDebating] = useState(false);
   const [currentDebateRound, setCurrentDebateRound] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Handle selecting an analysis from history
+  const handleSelectHistoryAnalysis = async (historyAnalysisId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/history/${historyAnalysisId}/full`);
+      if (response.ok) {
+        const data = await response.json();
+        // Set the result and close history view
+        if (data) {
+          setAnalysisResult({
+            company: { name: data.company_name || data.ticker, ticker: data.ticker },
+            esgScores: data.esg_scores || {
+              environmental: data.environmental_score || 0,
+              social: data.social_score || 0,
+              governance: data.governance_score || 0,
+              overall: data.overall_score || 0,
+            },
+            sdgImpacts: data.sdg_impact || data.top_sdgs || [],
+            greenwashingAlerts: data.greenwashing_signals || [],
+            blockchainHash: data.blockchain_hash,
+          });
+          setDebateSessions(data.debate_summary?.debate_sessions || []);
+          setGreenwashingSignals(data.greenwashing_signals || []);
+          setShowHistory(false);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load historical analysis:', err);
+    }
+  };
+
+  // Handle analyze from history (re-analyze a company)
+  const handleAnalyzeFromHistory = (ticker: string) => {
+    setCompanyInput(ticker);
+    setShowHistory(false);
+    // Trigger analysis after state update
+    setTimeout(() => {
+      const form = document.querySelector('form');
+      if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
+    }, 100);
+  };
 
   // Cleanup WebSocket on unmount
   useEffect(() => {
@@ -442,6 +486,17 @@ const AnalysisDashboard = () => {
             >
               {isAnalyzing ? 'Analyzing...' : 'Analyze'}
             </button>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`px-6 py-4 rounded-lg font-semibold transition-all duration-300 flex items-center gap-2 ${
+                showHistory
+                  ? 'bg-gaia-600 text-white'
+                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+              }`}
+            >
+              <History className="w-5 h-5" />
+              History
+            </button>
           </div>
 
           {/* Quick ticker suggestions */}
@@ -470,10 +525,20 @@ const AnalysisDashboard = () => {
         </div>
       </div>
 
+      {/* Analysis History */}
+      {showHistory && (
+        <div className="max-w-7xl mx-auto mb-6">
+          <AnalysisHistory
+            onSelectAnalysis={handleSelectHistoryAnalysis}
+            onAnalyzeCompany={handleAnalyzeFromHistory}
+          />
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="max-w-7xl mx-auto">
         <AnimatePresence mode="wait">
-          {isAnalyzing || analysisResult ? (
+          {!showHistory && (isAnalyzing || analysisResult) ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -496,33 +561,45 @@ const AnalysisDashboard = () => {
               {/* Results Grid */}
               {analysisResult && (
                 <>
-                  {/* ESG Scores */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <ESGScoreCard
-                      title="Environmental"
-                      score={analysisResult.esgScores.environmental}
-                      icon={<TrendingUp className="w-6 h-6" />}
-                      color="emerald"
-                    />
-                    <ESGScoreCard
-                      title="Social"
-                      score={analysisResult.esgScores.social}
-                      icon={<TrendingUp className="w-6 h-6" />}
-                      color="blue"
-                    />
-                    <ESGScoreCard
-                      title="Governance"
-                      score={analysisResult.esgScores.governance}
-                      icon={<TrendingUp className="w-6 h-6" />}
-                      color="purple"
-                    />
-                    <ESGScoreCard
-                      title="Overall ESG"
-                      score={analysisResult.esgScores.overall}
-                      icon={<TrendingUp className="w-6 h-6" />}
-                      color="gaia"
-                      highlight
-                    />
+                  {/* ESG Scores - Cards and Radar Chart */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Score Cards Column */}
+                    <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <ESGScoreCard
+                        title="Environmental"
+                        score={analysisResult.esgScores.environmental}
+                        icon={<TrendingUp className="w-6 h-6" />}
+                        color="emerald"
+                      />
+                      <ESGScoreCard
+                        title="Social"
+                        score={analysisResult.esgScores.social}
+                        icon={<TrendingUp className="w-6 h-6" />}
+                        color="blue"
+                      />
+                      <ESGScoreCard
+                        title="Governance"
+                        score={analysisResult.esgScores.governance}
+                        icon={<TrendingUp className="w-6 h-6" />}
+                        color="purple"
+                      />
+                      <ESGScoreCard
+                        title="Overall ESG"
+                        score={analysisResult.esgScores.overall}
+                        icon={<TrendingUp className="w-6 h-6" />}
+                        color="gaia"
+                        highlight
+                      />
+                    </div>
+                    {/* Radar Chart Column */}
+                    <div className="lg:col-span-1">
+                      <ESGRadarChart
+                        environmental={analysisResult.esgScores.environmental}
+                        social={analysisResult.esgScores.social}
+                        governance={analysisResult.esgScores.governance}
+                        companyName={analysisResult.company.name}
+                      />
+                    </div>
                   </div>
 
                   {/* SDG Impact */}

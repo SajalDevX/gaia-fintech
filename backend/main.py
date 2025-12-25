@@ -14,6 +14,7 @@ from typing import Dict, Any
 
 from config import get_settings
 from routes import router
+from database import init_db
 
 # Configure structured logging
 logger = structlog.get_logger()
@@ -39,6 +40,8 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize database connection pool
         logger.info("initializing_database")
+        init_db()
+        logger.info("database_initialized_successfully")
 
         # Initialize Redis connection
         logger.info("initializing_redis")

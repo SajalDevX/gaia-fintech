@@ -134,13 +134,25 @@ class ConnectionManager:
                 del self.active_connections[analysis_id]
         logger.info("websocket_disconnected", analysis_id=analysis_id)
 
+    def _serialize_for_json(self, obj: Any) -> Any:
+        """Recursively serialize objects for JSON, handling datetime."""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, dict):
+            return {k: self._serialize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._serialize_for_json(item) for item in obj]
+        return obj
+
     async def send_message(self, analysis_id: str, message: Dict[str, Any]):
         """Send message to all connections for an analysis."""
         if analysis_id in self.active_connections:
+            # Serialize datetime objects before sending
+            serialized_message = self._serialize_for_json(message)
             disconnected = []
             for connection in self.active_connections[analysis_id]:
                 try:
-                    await connection.send_json(message)
+                    await connection.send_json(serialized_message)
                 except Exception as e:
                     logger.warning("websocket_send_error", error=str(e))
                     disconnected.append(connection)

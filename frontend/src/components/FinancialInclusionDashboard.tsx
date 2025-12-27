@@ -206,13 +206,13 @@ const ScoreIndicator: React.FC<{ score: number; label: string; icon: React.React
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50">
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/50">
       <div className={`p-2 rounded-lg ${getColor(score)}`}>{icon}</div>
-      <div className="flex-1">
-        <div className="text-sm text-gray-400">{label}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-slate-400">{label}</div>
         <div className="text-lg font-semibold text-white">{score.toFixed(1)}</div>
       </div>
-      <div className="w-16 h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div className="w-16 h-2 bg-slate-700 rounded-full overflow-hidden flex-shrink-0">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${score}%` }}
@@ -243,7 +243,7 @@ const SegmentBadge: React.FC<{ segment: string }> = ({ segment }) => {
     refugees: { icon: <Globe size={14} />, color: 'bg-cyan-500/20 text-cyan-400', label: 'Refugees' },
   };
 
-  const info = segmentInfo[segment] || { icon: <Users size={14} />, color: 'bg-gray-500/20 text-gray-400', label: segment };
+  const info = segmentInfo[segment] || { icon: <Users size={14} />, color: 'bg-slate-500/20 text-slate-400', label: segment };
 
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${info.color}`}>
@@ -275,15 +275,15 @@ const SDGAlignment: React.FC<{ alignment: { [key: number]: number } }> = ({ alig
     <div className="space-y-3">
       {Object.entries(alignment).map(([sdg, score]) => (
         <div key={sdg} className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-lg ${sdgColors[parseInt(sdg)]} flex items-center justify-center text-white text-sm font-bold`}>
+          <div className={`w-8 h-8 rounded-lg ${sdgColors[parseInt(sdg)]} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
             {sdg}
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex justify-between text-sm mb-1">
-              <span className="text-gray-300">{sdgNames[parseInt(sdg)]}</span>
+              <span className="text-slate-300">{sdgNames[parseInt(sdg)]}</span>
               <span className="text-white font-medium">{(score as number).toFixed(0)}%</span>
             </div>
-            <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${score}%` }}
@@ -361,17 +361,17 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
-          <p className="text-gray-400">Analyzing financial inclusion metrics...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-gaia-500 mx-auto mb-4" />
+          <p className="text-slate-400">Analyzing financial inclusion metrics...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 rounded-2xl p-6 space-y-6">
+    <div className="glass rounded-2xl p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl">
@@ -379,7 +379,7 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white">Financial Inclusion Analysis</h2>
-              <p className="text-gray-400">{companyName} ({ticker})</p>
+              <p className="text-slate-400">{companyName} ({ticker})</p>
             </div>
           </div>
         </div>
@@ -389,7 +389,7 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
           </div>
           <div className="flex items-center justify-end gap-2 mt-1">
             <span className="text-2xl font-semibold text-white">{data.inclusion_score.grade}</span>
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-slate-400">
               Top {(100 - data.inclusion_score.percentile_rank).toFixed(0)}%
             </span>
           </div>
@@ -397,15 +397,15 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex gap-2 border-b border-gray-800 pb-4">
+      <div className="flex gap-2 border-b border-slate-700 pb-4 overflow-x-auto">
         {['overview', 'metrics', 'impact'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab as any)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === tab
-                ? 'bg-blue-500 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                ? 'bg-gaia-600 text-white'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -506,66 +506,66 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
             {/* Access Metrics */}
-            <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+            <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
               <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Smartphone size={18} className="text-blue-400" />
                 Access Metrics
               </h4>
               <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Unbanked Reached (per $1M)</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Unbanked Reached (per $1M)</span>
                   <span className="text-white font-medium">{data.metrics.access.unbanked_reached.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Mobile Money Users</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Mobile Money Users</span>
                   <span className="text-white font-medium">{data.metrics.access.mobile_users.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Agents Deployed</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Agents Deployed</span>
                   <span className="text-white font-medium">{data.metrics.access.agents_deployed}</span>
                 </div>
               </div>
             </div>
 
             {/* Credit Metrics */}
-            <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+            <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
               <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                 <DollarSign size={18} className="text-green-400" />
                 Credit Metrics
               </h4>
               <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Microloans (per $1M)</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Microloans (per $1M)</span>
                   <span className="text-white font-medium">{data.metrics.credit.microloans.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">First-Time Borrowers</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">First-Time Borrowers</span>
                   <span className="text-white font-medium">{data.metrics.credit.first_time_borrowers.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Approval Rate</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Approval Rate</span>
                   <span className="text-white font-medium">{data.metrics.credit.approval_rate.toFixed(1)}%</span>
                 </div>
               </div>
             </div>
 
             {/* Gender Metrics */}
-            <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+            <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
               <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Heart size={18} className="text-pink-400" />
                 Gender Inclusion
               </h4>
               <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Women Account Holders</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Women Account Holders</span>
                   <span className="text-white font-medium">{data.metrics.gender.women_accounts.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Women Entrepreneurs</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Women Entrepreneurs</span>
                   <span className="text-white font-medium">{data.metrics.gender.women_entrepreneurs.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Gender Parity Index</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Gender Parity Index</span>
                   <span className={`font-medium ${data.metrics.gender.parity_index >= 0.8 ? 'text-green-400' : data.metrics.gender.parity_index >= 0.6 ? 'text-yellow-400' : 'text-red-400'}`}>
                     {data.metrics.gender.parity_index.toFixed(2)}
                   </span>
@@ -574,56 +574,56 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
             </div>
 
             {/* Geographic Metrics */}
-            <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+            <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
               <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                 <MapPin size={18} className="text-orange-400" />
                 Geographic Reach
               </h4>
               <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Rural Coverage</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Rural Coverage</span>
                   <span className="text-white font-medium">{data.metrics.geographic.rural_coverage.toFixed(1)}%</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Last-Mile Communities</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Last-Mile Communities</span>
                   <span className="text-white font-medium">{data.metrics.geographic.last_mile_communities}</span>
                 </div>
               </div>
             </div>
 
             {/* Vulnerable Population Metrics */}
-            <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+            <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
               <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Users size={18} className="text-purple-400" />
                 Vulnerable Populations
               </h4>
               <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Refugees Served</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Refugees Served</span>
                   <span className="text-white font-medium">{data.metrics.vulnerable.refugees_served}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Youth Accounts</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Youth Accounts</span>
                   <span className="text-white font-medium">{data.metrics.vulnerable.youth_accounts.toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
             {/* Affordability Metrics */}
-            <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+            <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
               <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Target size={18} className="text-cyan-400" />
                 Affordability
               </h4>
               <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Zero-Fee Accounts</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Zero-Fee Accounts</span>
                   <span className={`font-medium ${data.metrics.affordability.zero_fee_accounts ? 'text-green-400' : 'text-red-400'}`}>
                     {data.metrics.affordability.zero_fee_accounts ? 'Yes' : 'No'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Effective Rate</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">Effective Rate</span>
                   <span className={`font-medium ${data.metrics.affordability.effective_rate < 30 ? 'text-green-400' : data.metrics.affordability.effective_rate < 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                     {data.metrics.affordability.effective_rate.toFixed(1)}%
                   </span>
@@ -644,29 +644,29 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
           >
             {/* Total Impact */}
             <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-xl p-6 border border-purple-500/30">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-purple-500/20 rounded-xl">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="p-4 bg-purple-500/20 rounded-xl flex-shrink-0">
                   <Award size={32} className="text-purple-400" />
                 </div>
                 <div>
                   <div className="text-4xl font-bold text-white">
                     {data.total_lives_impacted.toLocaleString()}
                   </div>
-                  <div className="text-gray-400">Lives Impacted per $1M Invested</div>
+                  <div className="text-slate-400">Lives Impacted per $1M Invested</div>
                 </div>
               </div>
             </div>
 
             {/* Strengths & Weaknesses */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+              <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
                 <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                   <CheckCircle size={18} className="text-green-400" />
                   Key Strengths
                 </h4>
                 <ul className="space-y-2">
                   {data.strengths.map((strength, i) => (
-                    <li key={i} className="flex items-start gap-2 text-gray-300">
+                    <li key={i} className="flex items-start gap-2 text-slate-300">
                       <ArrowUpRight size={16} className="text-green-400 mt-1 flex-shrink-0" />
                       {strength}
                     </li>
@@ -674,14 +674,14 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
                 </ul>
               </div>
 
-              <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+              <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
                 <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                   <AlertTriangle size={18} className="text-yellow-400" />
                   Areas for Improvement
                 </h4>
                 <ul className="space-y-2">
                   {data.weaknesses.map((weakness, i) => (
-                    <li key={i} className="flex items-start gap-2 text-gray-300">
+                    <li key={i} className="flex items-start gap-2 text-slate-300">
                       <ArrowDownRight size={16} className="text-yellow-400 mt-1 flex-shrink-0" />
                       {weakness}
                     </li>
@@ -691,14 +691,14 @@ const FinancialInclusionDashboard: React.FC<FinancialInclusionDashboardProps> = 
             </div>
 
             {/* Recommendations */}
-            <div className="bg-gray-800/50 rounded-xl p-5 space-y-4">
+            <div className="bg-slate-800/50 rounded-xl p-5 space-y-4">
               <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Info size={18} className="text-blue-400" />
                 Recommendations
               </h4>
               <ul className="space-y-3">
                 {data.recommendations.map((rec, i) => (
-                  <li key={i} className="flex items-start gap-3 p-3 bg-blue-500/10 rounded-lg text-gray-300">
+                  <li key={i} className="flex items-start gap-3 p-3 bg-blue-500/10 rounded-lg text-slate-300">
                     <span className="flex-shrink-0 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
                       {i + 1}
                     </span>

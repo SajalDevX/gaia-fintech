@@ -112,14 +112,14 @@ const SDGImpact = ({ impacts }: SDGImpactProps) => {
       {/* SDG Overview Grid */}
       <div className="pt-6 border-t border-slate-700">
         <h3 className="text-sm font-semibold text-slate-300 mb-4">All 17 SDG Goals</h3>
-        <div className="grid grid-cols-17 gap-2">
+        <div className="flex flex-wrap gap-2 justify-center">
           {SDG_GOALS.map((goal) => {
             const hasImpact = impacts.find((i) => i.goal === goal.number);
             return (
               <motion.div
                 key={goal.number}
                 whileHover={{ scale: 1.1 }}
-                className={`aspect-square rounded flex items-center justify-center text-white text-xs font-bold cursor-pointer transition-all ${
+                className={`w-9 h-9 rounded flex items-center justify-center text-white text-xs font-bold cursor-pointer transition-all ${
                   hasImpact ? 'opacity-100 shadow-lg' : 'opacity-40'
                 }`}
                 style={{ backgroundColor: goal.color }}

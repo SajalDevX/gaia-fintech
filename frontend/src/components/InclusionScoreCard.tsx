@@ -77,7 +77,7 @@ const InclusionScoreCard: React.FC<InclusionScoreCardProps> = ({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl p-5 border border-gray-700/50 hover:border-purple-500/50 transition-colors"
+      className="glass rounded-xl p-5 border border-slate-700/50 hover:border-purple-500/50 transition-colors"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
@@ -94,7 +94,7 @@ const InclusionScoreCard: React.FC<InclusionScoreCardProps> = ({
 
       {/* Main Score */}
       <div className="flex items-center gap-4 mb-4">
-        <div className="relative w-20 h-20">
+        <div className="relative w-20 h-20 flex-shrink-0">
           <svg className="w-full h-full transform -rotate-90">
             <circle
               cx="40"
@@ -103,7 +103,7 @@ const InclusionScoreCard: React.FC<InclusionScoreCardProps> = ({
               fill="none"
               stroke="currentColor"
               strokeWidth="6"
-              className="text-gray-700"
+              className="text-slate-700"
             />
             <motion.circle
               cx="40"
@@ -130,36 +130,36 @@ const InclusionScoreCard: React.FC<InclusionScoreCardProps> = ({
             </span>
           </div>
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="text-3xl font-bold text-white mb-1">
             {livesImpacted.toLocaleString()}
           </div>
-          <div className="text-sm text-gray-400">Lives impacted per $1M</div>
+          <div className="text-sm text-slate-400">Lives impacted per $1M</div>
         </div>
       </div>
 
       {/* Mini Metrics */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="text-center p-2 bg-gray-800/50 rounded-lg">
+        <div className="text-center p-2 bg-slate-800/50 rounded-lg">
           <Users size={14} className="mx-auto mb-1 text-blue-400" />
           <div className={`text-sm font-semibold ${getScoreColor(accessScore)}`}>
             {accessScore.toFixed(0)}
           </div>
-          <div className="text-xs text-gray-500">Access</div>
+          <div className="text-xs text-slate-500">Access</div>
         </div>
-        <div className="text-center p-2 bg-gray-800/50 rounded-lg">
+        <div className="text-center p-2 bg-slate-800/50 rounded-lg">
           <Heart size={14} className="mx-auto mb-1 text-pink-400" />
           <div className={`text-sm font-semibold ${getScoreColor(genderScore)}`}>
             {genderScore.toFixed(0)}
           </div>
-          <div className="text-xs text-gray-500">Gender</div>
+          <div className="text-xs text-slate-500">Gender</div>
         </div>
-        <div className="text-center p-2 bg-gray-800/50 rounded-lg">
+        <div className="text-center p-2 bg-slate-800/50 rounded-lg">
           <MapPin size={14} className="mx-auto mb-1 text-green-400" />
           <div className={`text-sm font-semibold ${getScoreColor(geographicScore)}`}>
             {geographicScore.toFixed(0)}
           </div>
-          <div className="text-xs text-gray-500">Geographic</div>
+          <div className="text-xs text-slate-500">Geographic</div>
         </div>
       </div>
 
@@ -176,7 +176,7 @@ const InclusionScoreCard: React.FC<InclusionScoreCardProps> = ({
       </div>
 
       {/* Washing Risk & Action */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
+      <div className="flex items-center justify-between pt-3 border-t border-slate-700/50 flex-wrap gap-2">
         <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full ${riskConfig.bg} ${riskConfig.color} text-xs`}>
           {riskConfig.icon}
           <span className="capitalize">{washingRisk} Risk</span>

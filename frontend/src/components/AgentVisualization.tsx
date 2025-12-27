@@ -8,19 +8,6 @@ interface AgentVisualizationProps {
 }
 
 const AgentVisualization = ({ agents, isActive }: AgentVisualizationProps) => {
-  const getStatusIcon = (status: AgentStatus['status']) => {
-    switch (status) {
-      case 'working':
-        return <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />;
-      case 'completed':
-        return <CheckCircle2 className="w-5 h-5 text-gaia-400" />;
-      case 'debating':
-        return <Activity className="w-5 h-5 text-purple-400 animate-pulse" />;
-      default:
-        return <div className="w-5 h-5 rounded-full bg-slate-600" />;
-    }
-  };
-
   const getStatusColor = (status: AgentStatus['status']) => {
     switch (status) {
       case 'working':
@@ -52,43 +39,106 @@ const AgentVisualization = ({ agents, isActive }: AgentVisualizationProps) => {
           <motion.div
             key={agent.id}
             initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: index * 0.1 }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              boxShadow: agent.status === 'working'
+                ? ['0 0 0 0 rgba(245, 158, 11, 0)', '0 0 20px 2px rgba(245, 158, 11, 0.3)', '0 0 0 0 rgba(245, 158, 11, 0)']
+                : '0 0 0 0 rgba(0, 0, 0, 0)'
+            }}
+            transition={{
+              delay: index * 0.1,
+              boxShadow: {
+                duration: 2,
+                repeat: agent.status === 'working' ? Infinity : 0,
+                ease: 'easeInOut'
+              }
+            }}
             className={`relative rounded-lg p-4 border-2 transition-all duration-300 ${getStatusColor(
               agent.status
             )}`}
           >
             {/* Agent Header */}
             <div className="flex items-start gap-3 mb-3">
-              <div className="text-3xl">{agent.avatar}</div>
+              <motion.div
+                className="text-3xl"
+                animate={agent.status === 'working' ? {
+                  scale: [1, 1.1, 1],
+                } : {}}
+                transition={{
+                  duration: 1.5,
+                  repeat: agent.status === 'working' ? Infinity : 0,
+                  ease: 'easeInOut'
+                }}
+              >
+                {agent.avatar}
+              </motion.div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-white text-sm mb-1 truncate">
                   {agent.name}
                 </h3>
                 <p className="text-xs text-slate-400 truncate">{agent.role}</p>
               </div>
-              {getStatusIcon(agent.status)}
             </div>
 
             {/* Current Task */}
-            {agent.currentTask && (
+            {(agent.currentTask || agent.status === 'working') && (
               <div className="mb-3">
-                <p className="text-xs text-slate-300 line-clamp-2">{agent.currentTask}</p>
+                <p className="text-xs text-slate-300 line-clamp-2">
+                  {agent.currentTask || `Gathering ${agent.role.toLowerCase()} data...`}
+                </p>
+              </div>
+            )}
+
+            {/* Completed Indicator */}
+            {agent.status === 'completed' && (
+              <div className="mb-3">
+                <div className="flex items-center gap-2 text-xs text-gaia-400">
+                  <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: '100%' }}
+                      transition={{ duration: 0.5 }}
+                      className="h-full bg-gradient-to-r from-gaia-500 to-emerald-400"
+                    />
+                  </div>
+                  <span className="font-medium">Done</span>
+                </div>
               </div>
             )}
 
             {/* Progress Bar */}
             {agent.status === 'working' && (
               <div className="mb-2">
-                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${agent.progress}%` }}
-                    transition={{ duration: 0.3 }}
-                    className="h-full bg-gradient-to-r from-amber-500 to-amber-400"
-                  />
+                <div className="h-2 bg-slate-700 rounded-full overflow-hidden relative">
+                  {agent.progress > 0 ? (
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${agent.progress}%` }}
+                      transition={{ duration: 0.3 }}
+                      className="h-full bg-gradient-to-r from-amber-500 to-amber-400"
+                    />
+                  ) : (
+                    /* Indeterminate loading animation when progress is 0 */
+                    <motion.div
+                      className="absolute h-full w-1/3 bg-gradient-to-r from-transparent via-amber-500 to-transparent"
+                      animate={{
+                        x: ['-100%', '400%'],
+                      }}
+                      transition={{
+                        duration: 1.5,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                      }}
+                    />
+                  )}
                 </div>
-                <p className="text-xs text-slate-500 mt-1 text-right">{agent.progress}%</p>
+                <div className="flex justify-between items-center mt-1">
+                  <p className="text-xs text-amber-400/70">
+                    {agent.progress === 0 ? 'Initializing...' : 'Processing...'}
+                  </p>
+                  <p className="text-xs text-slate-500">{agent.progress}%</p>
+                </div>
               </div>
             )}
 
@@ -107,7 +157,7 @@ const AgentVisualization = ({ agents, isActive }: AgentVisualizationProps) => {
             {/* Status Badge */}
             <div className="absolute top-2 right-2">
               <div
-                className={`text-xs px-2 py-1 rounded-full font-medium ${
+                className={`text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5 ${
                   agent.status === 'working'
                     ? 'bg-amber-500/20 text-amber-300'
                     : agent.status === 'completed'
@@ -117,7 +167,16 @@ const AgentVisualization = ({ agents, isActive }: AgentVisualizationProps) => {
                     : 'bg-slate-700/50 text-slate-400'
                 }`}
               >
-                {agent.status}
+                {agent.status === 'completed' && (
+                  <CheckCircle2 className="w-3 h-3" />
+                )}
+                {agent.status === 'working' && (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                )}
+                {agent.status === 'debating' && (
+                  <Activity className="w-3 h-3" />
+                )}
+                <span>{agent.status}</span>
               </div>
             </div>
           </motion.div>

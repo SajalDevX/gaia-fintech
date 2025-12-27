@@ -248,13 +248,13 @@ const AnalysisHistory = ({ onSelectAnalysis, onAnalyzeCompany }: AnalysisHistory
                 onClick={() => onSelectAnalysis?.(analysis.analysis_id)}
                 className="glass rounded-lg p-4 cursor-pointer hover:bg-slate-700/30 transition-colors group"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center space-x-4 min-w-0">
+                    <div className="w-12 h-12 rounded-lg bg-slate-700/50 flex items-center justify-center flex-shrink-0">
                       <Building2 className="w-6 h-6 text-gaia-400" />
                     </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center flex-wrap gap-2">
                         <span className="font-semibold text-white">{analysis.ticker}</span>
                         <span className={`px-2 py-0.5 rounded text-xs ${getRiskColor(analysis.risk_level)}`}>
                           {analysis.risk_level || 'N/A'}
@@ -266,12 +266,12 @@ const AnalysisHistory = ({ onSelectAnalysis, onAnalyzeCompany }: AnalysisHistory
                           </span>
                         )}
                       </div>
-                      <div className="text-sm text-slate-400">{analysis.company_name}</div>
+                      <div className="text-sm text-slate-400 truncate">{analysis.company_name}</div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-6">
-                    <div className="text-right">
+                  <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6">
+                    <div className="text-left sm:text-right">
                       <div className={`text-lg font-bold ${getScoreColor(analysis.overall_score)}`}>
                         {analysis.overall_score?.toFixed(1) || 'N/A'}
                       </div>
@@ -279,11 +279,11 @@ const AnalysisHistory = ({ onSelectAnalysis, onAnalyzeCompany }: AnalysisHistory
                     </div>
 
                     <div className="flex items-center space-x-2 text-slate-400">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-sm">{formatDate(analysis.created_at)}</span>
+                      <Clock className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm whitespace-nowrap">{formatDate(analysis.created_at)}</span>
                     </div>
 
-                    <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-gaia-400 transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-gaia-400 transition-colors flex-shrink-0 hidden sm:block" />
                   </div>
                 </div>
               </motion.div>
